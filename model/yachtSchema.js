@@ -7,7 +7,7 @@ const yachtSchema = new Schema({
     description: String,
     capacity: Number,
     price: Number,
-    yacht_type: { type: mongoose.Schema.Types.ObjectId, ref: 'YachtType' },
+    yachtType_id: { type: mongoose.Schema.Types.ObjectId, ref: 'YachtType' },
     company_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Company' },
     location_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Location' }
 });
