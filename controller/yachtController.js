@@ -1,9 +1,8 @@
 const Yacht = require('../model/yachtSchema');
-const YachtType = require('../model/yachtType');
-const Company = require('../model/company');
-const Location = require('../model/location');
+const {location, company, yachtType, yacht } = require('../model');
 const cloudinary = require('../utils/configClound')
 
+// hàm tao mới một chiếc du thuyền
 const createYacht = async (req, res) => {
     try {
         const { name, launch, description, hullBody, rule, itinerary, location_id, yachtType_id, id_companys } = req.body;

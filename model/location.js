@@ -1,8 +1,8 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 const { Schema } = mongoose;
 
 const locationSchema = new Schema({
-    name: String
+  name: String,
 });
 
-module.exports = mongoose.model('Location', locationSchema, 'locations');
+module.exports = mongoose.model("Location", locationSchema, "locations");
