@@ -2,10 +2,12 @@ const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
 const customerSchema = new Schema({
-  name: String,
-  phone_number: String,
+  fullName: String,
+  phoneNumber: String,
+  address: String,
   email: String,
-  account_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Account' }
-});
+  accountId: { type: mongoose.Schema.Types.ObjectId, ref: 'Account', required: true, unique: true },
+}, { timestamps: true });
 
-module.exports = mongoose.model('Customer', customerSchema);
+
+module.exports = mongoose.model('Customer', customerSchema, 'customers');

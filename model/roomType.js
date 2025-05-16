@@ -3,7 +3,10 @@ const { Schema } = mongoose;
 
 const roomTypeSchema = new Schema({
   name: String,
-  price: Number
+  type: String,
+  utility: String,
+  price: Number,
+  yachtId: { type: mongoose.Schema.Types.ObjectId, ref: 'Yacht' },
 });
 
 module.exports = mongoose.model('RoomType', roomTypeSchema);

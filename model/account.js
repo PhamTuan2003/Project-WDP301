@@ -2,9 +2,15 @@ const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
 const accountSchema = new Schema({
-  username: String,
-  password: String,
-  status: Number
-});
+  username: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+  roles: {
+    type: String,
+    enum: ['ADMIN', 'CUSTOMER', 'COMPANY'],
+    required: true
+  },
+  status: { type: Number, default: 1 } ,
+}, { timestamps: true });
 
-module.exports = mongoose.model('Account', accountSchema);
+
+module.exports = mongoose.model('Account', accountSchema, 'accounts');

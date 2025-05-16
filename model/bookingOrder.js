@@ -2,12 +2,16 @@ const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
 const bookingOrderSchema = new Schema({
-  customer_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer' },
-  yacht_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Yacht' },
-  schedule_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Schedule' },
   amount: Number,
+  bookingDate: { type: Date, default: Date.now },
+  amount: Number,
+  requirements: String,
   status: String,
-  create_time: { type: Date, default: Date.now }
+  reason: String,
+  scheduleId: { type: mongoose.Schema.Types.ObjectId, ref: 'Schedule' },
+  customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer' },
+  transactionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Transaction', unique: true },
+  txnRef: {type: String, unique: true},
 });
 
-module.exports = mongoose.model('BookingOrder', bookingOrderSchema);
+module.exports = mongoose.model('BookingOrder', bookingOrderSchema, 'bookingOrders');

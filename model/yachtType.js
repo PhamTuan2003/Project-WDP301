@@ -6,4 +6,4 @@ const yachTypeSchema = new Schema({
     ranking: Number
 });
 
-module.exports = mongoose.model('YachtType', yachTypeSchema);
+module.exports = mongoose.model('YachtType', yachTypeSchema, 'yachtTypes');

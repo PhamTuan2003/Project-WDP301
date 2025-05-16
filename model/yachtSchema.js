@@ -3,13 +3,18 @@ const { Schema } = mongoose;
 
 const yachtSchema = new Schema({
     name: String,
-    registration_no: String,
+    image: String,
+    launch: String,
     description: String,
-    capacity: Number,
-    price: Number,
-    yachtType_id: { type: mongoose.Schema.Types.ObjectId, ref: 'YachtType' },
-    company_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Company' },
-    location_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Location' }
+    hullBody: Number,
+    rule: Number,
+    itinerary: String,
+    locationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Location' },
+    yachtTypeId: { type: mongoose.Schema.Types.ObjectId, ref: 'YachtType' },
+    IdCompanys: { type: mongoose.Schema.Types.ObjectId, ref: 'Company' },
+    createdAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now },
+    isDeleted: { type: Boolean, default: true },
 });
 
-module.exports = mongoose.model('Yacht', yachtSchema);
+module.exports = mongoose.model('Yacht', yachtSchema, 'yachts');

@@ -20,8 +20,15 @@ app.use(urlencoded({ extended: true }));
 app.use(morgan('dev'));
 
 
-
+// ACCOUNTS ROUTES
 app.use('/api/v1/accounts', require('./routers/accountRouter'));
+
+
+
+
+
+// YACHTS ROUTES
+app.use('/api/v1', require('./routers/yachtRouter'));
 
 
 const PORT = process.env.PORT || 9999;

@@ -5,9 +5,10 @@ const roomSchema = new Schema({
   name: String,
   description: String,
   area: Number,
+  avatar: String,
   max_people: Number,
-  room_type: { type: mongoose.Schema.Types.ObjectId, ref: 'RoomType' },
-  yacht_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Yacht' }
+  roomTypeId: { type: mongoose.Schema.Types.ObjectId, ref: 'RoomType' },
+  yachtId: { type: mongoose.Schema.Types.ObjectId, ref: 'Yacht' }
 });
 
 module.exports = mongoose.model('Room', roomSchema);

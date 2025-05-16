@@ -2,10 +2,12 @@ const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
 const feedbackSchema = new Schema({
-  rating: Number,
+  starRating: Number,
   description: String,
-  customer_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer' },
-  yacht_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Yacht' }
+  createdAt: { type: Date, default: Date.now },
+  idBooking: {type: String, unique: true},
+  customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer' },
+  yachtId: { type: mongoose.Schema.Types.ObjectId, ref: 'Yacht' }
 });
 
-module.exports = mongoose.model('Feedback', feedbackSchema);
+module.exports = mongoose.model('Feedback', feedbackSchema, 'feedbacks');

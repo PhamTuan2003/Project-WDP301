@@ -2,8 +2,8 @@ const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
 const yachtScheduleSchema = new Schema({
-  yacht_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Yacht' },
-  schedule_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Schedule' }
+  yachtId: { type: mongoose.Schema.Types.ObjectId, ref: 'Yacht' },
+  scheduleId: { type: mongoose.Schema.Types.ObjectId, ref: 'Schedule' }
 });
 
-module.exports = mongoose.model('YachtSchedule', yachtScheduleSchema);
+module.exports = mongoose.model('YachtSchedule', yachtScheduleSchema, 'yachtSchedules');
