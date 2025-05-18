@@ -8,8 +8,7 @@ const customerSchema = new Schema(
     address: String,
     email: String,
     accountId: { type: mongoose.Schema.Types.ObjectId, ref: "Account", required: true, unique: true },
-  },
-  { timestamps: true }
+  }
 );
 
 module.exports = mongoose.model("Customer", customerSchema, "customers");

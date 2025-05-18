@@ -11,8 +11,7 @@ const accountSchema = new Schema(
       required: true,
     },
     status: { type: Number, default: 1 },
-  },
-  { timestamps: true }
+  }
 );
 
 module.exports = mongoose.model("Account", accountSchema, "accounts");

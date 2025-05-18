@@ -22,7 +22,7 @@ app.use(morgan('dev'));
 
 // ACCOUNTS ROUTES
 app.use('/api/v1/accounts', require('./routers/accountRouter'));
-
+app.use('/api/v1/customers', require('./routers/customerRouter'));
 
 
 

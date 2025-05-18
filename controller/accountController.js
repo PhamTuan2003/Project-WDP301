@@ -1,15 +1,14 @@
-const { account } = require('../model');
+const { Account } = require('../model');
 
 const getAllAccounts = async (req, res) => {
   try {
-    const accounts = await account.find();
+    const accounts = await Account.find();
 
     if (!accounts) {
-      return res.status(404).json({ message: "No accounts found" });
+      return res.status(404).json({ message: "Không tìm thấy tài khoản nào" });
     }
-    // res.status(200).json(accounts);
     res.status(200).json({
-      message: "Accounts retrieved successfully",
+      message: "Lấy danh sách tài khoản thành công",
       data: accounts,
     });
   } catch (error) {

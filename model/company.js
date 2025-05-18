@@ -9,8 +9,7 @@ const companySchema = new Schema(
     email: String,
     exist: { type: Number, default: 1 },
     accountId: { type: mongoose.Schema.Types.ObjectId, ref: "Account", required: true, unique: true },
-  },
-  { timestamps: true }
+  }
 );
 
 module.exports = mongoose.model("Company", companySchema, "companies");
