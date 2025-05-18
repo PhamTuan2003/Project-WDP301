@@ -28,9 +28,9 @@ const register = async (req, res) => {
     // Tạo hồ sơ Customer
     const customer = await Customer.create({
       fullName,
+      email,
       phoneNumber,
       address,
-      email,
       accountId: account._id,
     });
 
