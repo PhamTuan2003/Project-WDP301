@@ -4,8 +4,7 @@ const cloudinary = require("../utils/configClound");
 // hàm tao mới một chiếc du thuyền
 const createYacht = async (req, res) => {
   try {
-    const { name, launch, description, hullBody, rule, itinerary, location_id, yachtType_id, id_companys } =
-      req.body;
+    const { name, launch, description, hullBody, rule, itinerary, location_id, yachtType_id, id_companys } = req.body;
     let imageUrt = "";
 
     if (req.file) {
