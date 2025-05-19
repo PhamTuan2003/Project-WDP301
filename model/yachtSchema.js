@@ -19,3 +19,4 @@ const yachtSchema = new Schema(
 );
 
 module.exports = mongoose.model("Yacht", yachtSchema, "yachts");
+//done

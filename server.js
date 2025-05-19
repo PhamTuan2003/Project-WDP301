@@ -28,8 +28,9 @@ app.use('/api/v1/companies', require('./routers/companyRouter'));
 
 
 
+
 // YACHTS ROUTES
-app.use('/api/v1', require('./routers/yachtRouter'));
+app.use('/api/v1/yachts', require('./routers/yachtRouter'));
 
 
 const PORT = process.env.PORT || 9999;

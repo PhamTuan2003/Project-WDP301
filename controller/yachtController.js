@@ -1,5 +1,52 @@
-const { location, company, yachtType, Yacht } = require("../model");
+const { YachtSchema, YachtService } = require("../model");
 const cloudinary = require("../utils/configClound");
+
+// Hàm lấy tất cả du thuyền
+const getAllYacht = async (req, res) => {
+  try {
+    const yachts = await YachtSchema.find()
+      .populate("locationId", "-_id name")
+      .populate("yachtTypeId", "-_id name ranking")
+      .populate("IdCompanys", "-_id name address logo");
+
+    res.status(200).json({
+      success: true,
+      message: "Lấy danh sách du thuyền thành công",
+      data: yachts,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: "Lỗi server khi lấy du thuyền",
+      error: err.message,
+    });
+  }
+};
+
+// Hàm lấy tất cả dịch vụ của du thuyền
+const getAllServices = async (req, res) => {
+  try {
+    const data = await YachtService.find()
+      .populate({
+        path: "yachtId",
+        select: "-_id name",
+      })
+      .populate({
+        path: "serviceId",
+        select: "-_id serviceName price",
+      });
+
+    res.status(200).json({
+      message: "Lấy danh sách dịch vụ thành công",
+      data,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Lỗi khi lấy danh sách dịch vụ",
+      error: error.message,
+    });
+  }
+};
 
 // hàm tao mới một chiếc du thuyền
 const createYacht = async (req, res) => {
@@ -46,4 +93,4 @@ const createYacht = async (req, res) => {
   }
 };
 
-module.exports = { createYacht };
+module.exports = { createYacht, getAllYacht, getAllServices };

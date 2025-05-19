@@ -7,3 +7,4 @@ const yachTypeSchema = new Schema({
 });
 
 module.exports = mongoose.model("YachtType", yachTypeSchema, "yachtTypes");
+//done

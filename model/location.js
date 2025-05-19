@@ -6,3 +6,4 @@ const locationSchema = new Schema({
 });
 
 module.exports = mongoose.model("Location", locationSchema, "locations");
+//done
