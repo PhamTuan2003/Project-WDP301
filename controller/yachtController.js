@@ -4,10 +4,18 @@ const cloudinary = require("../utils/configClound");
 // Hàm lấy tất cả du thuyền
 const getAllYacht = async (req, res) => {
   try {
-    const yachts = await YachtSchema.find()
+    const limit = parseInt(req.query.limit) || 0; // Nếu không có thì lấy 0 (tức là không giới hạn)
+
+    const yachtsQuery = YachtSchema.find()
       .populate("locationId", "-_id name")
       .populate("yachtTypeId", "-_id name ranking")
       .populate("IdCompanys", "-_id name address logo");
+
+    if (limit > 0) {
+      yachtsQuery.limit(limit); // Áp dụng giới hạn nếu có
+    }
+
+    const yachts = await yachtsQuery;
 
     res.status(200).json({
       success: true,
