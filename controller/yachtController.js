@@ -5,7 +5,7 @@ const cloudinary = require("../utils/configClound");
 const createYacht = async (req, res) => {
   try {
     const { name, launch, description, hullBody, rule, itinerary, location_id, yachtType_id, id_companys } = req.body;
-    let imageUrt = "";
+    let imageUrl = "";
 
     if (req.file) {
       const result = await cloudinary.uploader.upload_stream({ folder: "yachts" }, (error, result) => {
@@ -13,11 +13,11 @@ const createYacht = async (req, res) => {
           console.error("Error uploading image:", error);
           return res.status(500).json({ message: "Error uploading image" });
         }
-        imageUrt = result.secure_url;
+        imageUrl = result.secure_url;
 
         const yacht = new Yacht({
           name,
-          image: imageUrt,
+          image: imageUrl,
           launch,
           description,
           hullBody,
