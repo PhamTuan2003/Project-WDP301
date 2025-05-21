@@ -7,3 +7,4 @@ const scheduleSchema = new Schema({
 });
 
 module.exports = mongoose.model("Schedule", scheduleSchema);
+//done

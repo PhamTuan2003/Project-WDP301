@@ -7,3 +7,4 @@ const yachtScheduleSchema = new Schema({
 });
 
 module.exports = mongoose.model("YachtSchedule", yachtScheduleSchema, "yachtSchedules");
+//done

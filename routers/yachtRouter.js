@@ -1,13 +1,11 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const {createYacht, getAllYacht, getAllServices } = require('../controller/yachtController');
-const {upload} = require('../utils/configClound')
+const { getAllYacht, getAllServices, searchYachts, getFeedbacksByYacht, getSchedulesByYacht } = require("../controller/yachtController");
 
-
-
-router.get("/", getAllYacht); // GET /api/v1/yachts
-router.get("/services", getAllServices); // GET /api/v1/yachts/services
-router.post('/yacht', upload.single('image'), createYacht);
-
+router.get("/", getAllYacht);
+router.get("/services", getAllServices);
+router.get('/findboat', searchYachts);
+router.get('/:id/feedbacks', getFeedbacksByYacht);
+router.get('/:id/schedules', getSchedulesByYacht);
 
 module.exports = router;
