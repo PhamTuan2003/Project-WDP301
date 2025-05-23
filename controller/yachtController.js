@@ -211,29 +211,10 @@ const getSchedulesByYacht = async (req, res) => {
   }
 };
 
-// hàm lấy du thuyền theo id
-const getYachtById = async (req, res) => {
-  try {
-    const yacht = await YachtSchema.findById(req.params.id)
-      .populate("locationId", "-_id name")
-      .populate("yachtTypeId", "-_id name ranking")
-      .populate("IdCompanys", "-_id name address logo");
-    if (!yacht) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Du thuyền không tồn tại" });
-    }
-    res.status(200).json({ success: true, data: yacht });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-};
-
 module.exports = {
   getAllYacht,
   getAllServices,
   searchYachts,
   getFeedbacksByYacht,
   getSchedulesByYacht,
-  getYachtById,
 };
