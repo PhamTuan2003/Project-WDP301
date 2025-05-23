@@ -4,7 +4,7 @@ const { Schema } = mongoose;
 const yachtSchema = new Schema(
   {
     name: String, //tên du thuyền
-    image: String, //hình ảnh
+    image: [String], //hình ảnh
     launch: String, //năm hạ thuỷ
     description: String, //mô tả
     hullBody: String, //thân vỏ làm bằng gì
