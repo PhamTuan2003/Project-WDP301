@@ -210,6 +210,34 @@ const getSchedulesByYacht = async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 };
+// Hàm lấy thông tin du thuyền theo id
+const getYachtById = async (req, res) => {
+  try {
+    const yacht = await YachtSchema.findById(req.params.id)
+      .populate("locationId", "-_id name")
+      .populate("yachtTypeId", "-_id name ranking")
+      .populate("IdCompanys", "-_id name address logo");
+
+    if (!yacht) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy du thuyền với id này",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Lấy thông tin du thuyền thành công",
+      data: yacht,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: "Lỗi server khi lấy thông tin du thuyền",
+      error: err.message,
+    });
+  }
+};
 
 module.exports = {
   getAllYacht,
@@ -217,4 +245,5 @@ module.exports = {
   searchYachts,
   getFeedbacksByYacht,
   getSchedulesByYacht,
+  getYachtById,
 };
