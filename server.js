@@ -36,6 +36,11 @@ app.use("/api/v1/companies", require("./routers/companyRouter"));
 app.use("/api/v1/yachts", require("./routers/yachtRouter"));
 app.use("/api/v1/yachtImages", require("./routers/yachtImageRouter"));
 
+// ROOMS ROUTES
+app.use("/api/v1/rooms", require("./routers/roomRouter"));
+
+//FEEDBACK ROUTES
+app.use("/api/v1/feedback", require("./routers/feedbackRouter"));
 const PORT = process.env.PORT || 9999;
 
 app.listen(PORT, () =>
