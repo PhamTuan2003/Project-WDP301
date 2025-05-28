@@ -84,4 +84,14 @@
   "roles": "CUSTOMER",
   "status": 1,
   "__v": 0
+},
+{
+  "_id": {
+    "$oid": "6831bbefd87337488dc2fad9"
+  },
+  "username": "thuctrandanh93",
+  "password": "$2b$10$QyJL/FSmSENb9YyylZBRSeEJiPngikoHYo2Z/0yKTm/6O1GPv/JWm",
+  "roles": "CUSTOMER",
+  "status": 1,
+  "__v": 0
 }]

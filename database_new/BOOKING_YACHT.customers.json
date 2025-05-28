@@ -72,4 +72,17 @@
     "$oid": "682c2731c2a6cecd3daaf1f3"
   },
   "__v": 0
+},
+{
+  "_id": {
+    "$oid": "6831bbefd87337488dc2fadb"
+  },
+  "fullName": "Tran Danh Thuc",
+  "phoneNumber": "0387029603",
+  "address": "Ngo Gia Tu Street, Tien An Ward",
+  "email": "ab1@gmail.com",
+  "accountId": {
+    "$oid": "6831bbefd87337488dc2fad9"
+  },
+  "__v": 0
 }]
