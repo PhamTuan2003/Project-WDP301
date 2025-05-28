@@ -63,6 +63,33 @@ const getAllServices = async (req, res) => {
   }
 };
 
+// Hàm lấy tất cả dịch vụ của du thuyền theo id
+const getServicesByYachtId = async (req, res) => {
+  try {
+    const yachtId = req.params.id;
+    const services = await YachtService.find({ yachtId })
+      .populate({ path: "serviceId", select: "-_id serviceName price" })
+      .populate({ path: "yachtId", select: "-_id name" });
+    if (!services || services.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy dịch vụ cho du thuyền này",
+      });
+    }
+    res.status(200).json({
+      success: true,
+      message: "Lấy danh sách dịch vụ thành công",
+      data: services,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Lỗi khi lấy danh sách dịch vụ",
+      error: error.message,
+    });
+  }
+};
+
 // Hàm tìm kiếm du thuyền
 const searchYachts = async (req, res) => {
   try {
@@ -246,4 +273,5 @@ module.exports = {
   getFeedbacksByYacht,
   getSchedulesByYacht,
   getYachtById,
+  getServicesByYachtId,
 };
