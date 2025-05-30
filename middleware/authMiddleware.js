@@ -1,6 +1,7 @@
 const jwt = require("jsonwebtoken");
+const Customer = require("../model/customer");
 
-module.exports = (req, res, next) => {
+const veryfiToken = async (req, res, next) => {
   const authHeader = req.headers["authorization"];
   if (!authHeader) return res.status(401).json({ message: "Không có Token" });
 
@@ -11,13 +12,23 @@ module.exports = (req, res, next) => {
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
     req.user = payload;
-    if (!payload._id) {
-      return res
-        .status(401)
-        .json({ success: false, message: "Invalid token: missing user ID" });
+
+    const customer = await Customer.findOne({ accountId: payload._id });
+    if (!customer) {
+      return res.status(401).json({
+        success: false,
+        message: "Customer not found for this account",
+      });
     }
+
+    // Set customerId giống như customerController return
+    req.user.customerId = customer._id.toString();
     next();
   } catch (err) {
     res.status(401).json({ message: "Token không hợp lệ hoặc đã hết hạn" });
   }
+};
+
+module.exports = {
+  veryfiToken,
 };
