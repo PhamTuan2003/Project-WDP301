@@ -1,23 +1,21 @@
 const express = require("express");
+
+const {
+  createDepositPayment,
+  createFullPayment,
+  handlePaymentCallback,
+  simulatePaymentSuccess,
+  getTransactionStatus,
+} = require("../controller/paymentController");
+const { veryfiToken } = require("../middleware/authMiddleware");
 const router = express.Router();
-const paymentController = require("../controller/paymentController");
-const { veryfiToken } = require("../middleware/veryfiTokenMiddleware");
-
 // Payment routes
-router.post("/deposit", veryfiToken, paymentController.createDepositPayment);
-router.post("/full", veryfiToken, paymentController.createFullPayment);
-router.post("/callback", paymentController.handlePaymentCallback);
+router.post("/deposit", veryfiToken, createDepositPayment);
+router.post("/full", veryfiToken, createFullPayment);
+router.post("/callback", handlePaymentCallback);
 
-// Testing/Development routes
-router.post(
-  "/simulate/:transactionId",
-  veryfiToken,
-  paymentController.simulatePaymentSuccess
-);
-router.get(
-  "/transaction/:transactionId",
-  veryfiToken,
-  paymentController.getTransactionStatus
-);
+// Testing/Development routesS
+router.post("/simulate/:transactionId", veryfiToken, simulatePaymentSuccess);
+router.get("/transaction/:transactionId", veryfiToken, getTransactionStatus);
 
 module.exports = router;

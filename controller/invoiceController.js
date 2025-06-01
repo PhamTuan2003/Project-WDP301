@@ -1,11 +1,11 @@
-const Invoice = require("../model/invoice");
+const Invoice = require("../model/invoiceSchema");
 const Transaction = require("../model/transaction");
 const Customer = require("../model/customer");
 const PDFDocument = require("pdfkit");
 const asyncHandler = require("express-async-handler");
 
 // Lấy invoice theo transaction ID
-exports.getInvoiceByTransaction = asyncHandler(async (req, res) => {
+const getInvoiceByTransaction = asyncHandler(async (req, res) => {
   const { transactionId } = req.params;
 
   try {
@@ -51,7 +51,7 @@ exports.getInvoiceByTransaction = asyncHandler(async (req, res) => {
 });
 
 // Lấy invoice theo ID
-exports.getInvoiceById = asyncHandler(async (req, res) => {
+const getInvoiceById = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
   try {
@@ -97,7 +97,7 @@ exports.getInvoiceById = asyncHandler(async (req, res) => {
 });
 
 // Download PDF invoice
-exports.downloadInvoicePDF = asyncHandler(async (req, res) => {
+const downloadInvoicePDF = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
   try {
@@ -301,7 +301,7 @@ exports.downloadInvoicePDF = asyncHandler(async (req, res) => {
 });
 
 // Lấy danh sách invoices của customer
-exports.getCustomerInvoices = asyncHandler(async (req, res) => {
+const getCustomerInvoices = asyncHandler(async (req, res) => {
   try {
     const customer = await Customer.findOne({ accountId: req.user._id });
     if (!customer) {
@@ -334,3 +334,10 @@ exports.getCustomerInvoices = asyncHandler(async (req, res) => {
     });
   }
 });
+
+module.exports = {
+  getInvoiceByTransaction,
+  getInvoiceById,
+  downloadInvoicePDF,
+  getCustomerInvoices,
+};

@@ -1,16 +1,17 @@
 const express = require("express");
-const router = express.Router();
-const invoiceController = require("../controller/invoiceController");
-const { veryfiToken } = require("../middleware/authMiddleware");
 
+const {
+  getCustomerInvoices,
+  downloadInvoicePDF,
+  getInvoiceById,
+  getInvoiceByTransaction,
+} = require("../controller/invoiceController");
+const { veryfiToken } = require("../middleware/authMiddleware");
+const router = express.Router();
 // Invoice routes
-router.get(
-  "/transaction/:transactionId",
-  veryfiToken,
-  invoiceController.getInvoiceByTransaction
-);
-router.get("/customer", veryfiToken, invoiceController.getCustomerInvoices);
-router.get("/:id", veryfiToken, invoiceController.getInvoiceById);
-router.get("/:id/pdf", veryfiToken, invoiceController.downloadInvoicePDF);
+router.get("/transaction/:transactionId", veryfiToken, getInvoiceByTransaction);
+router.get("/customer", veryfiToken, getCustomerInvoices);
+router.get("/:id", veryfiToken, getInvoiceById);
+router.get("/:id/pdf", veryfiToken, downloadInvoicePDF);
 
 module.exports = router;

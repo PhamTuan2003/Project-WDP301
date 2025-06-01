@@ -2,7 +2,6 @@ const mongoose = require("mongoose");
 
 const bookingOrderSchema = new mongoose.Schema(
   {
-    // Existing fields...
     customer: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Customer",
@@ -16,25 +15,23 @@ const bookingOrderSchema = new mongoose.Schema(
     schedule: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Schedule",
+      default: null,
     },
     amount: {
       type: Number,
       required: true,
       min: 0,
     },
-
-    // THÊM CÁC FIELDS MỚI
     status: {
       type: String,
       enum: [
-        "pending",
+        "consultation_requested",
         "confirmed",
         "completed",
         "cancelled",
         "rejected",
-        "consultation_requested",
       ],
-      default: "pending",
+      default: "consultation_requested",
     },
     paymentStatus: {
       type: String,
@@ -44,39 +41,70 @@ const bookingOrderSchema = new mongoose.Schema(
     depositAmount: {
       type: Number,
       default: 0,
+      min: 0,
     },
     totalPaid: {
       type: Number,
       default: 0,
+      min: 0,
     },
     remainingAmount: {
       type: Number,
       default: 0,
+      min: 0,
     },
     confirmationCode: {
       type: String,
       unique: true,
     },
-
-    // Existing fields...
-    requirements: String,
-    guestCount: Number,
-    checkInDate: Date,
-    cancelledAt: Date,
-    confirmedAt: Date,
-
-    // Consultation specific data
+    requirements: {
+      type: String,
+      default: "",
+    },
+    guestCount: {
+      type: Number,
+      required: true,
+      min: 1,
+    },
+    checkInDate: {
+      type: Date,
+      required: true,
+    },
+    cancelledAt: {
+      type: Date,
+    },
+    confirmedAt: {
+      type: Date,
+    },
     consultationData: {
-      requestedRooms: [Object],
-      estimatedPrice: Number,
-      createdAt: Date,
+      requestedRooms: [
+        {
+          id: { type: String, required: true },
+          name: String,
+          description: String,
+          area: Number,
+          avatar: String,
+          max_people: Number,
+          price: Number,
+          quantity: Number,
+          beds: Number,
+          image: String,
+        },
+      ],
+      estimatedPrice: {
+        type: Number,
+        min: 0,
+      },
+      createdAt: {
+        type: Date,
+        default: Date.now,
+      },
       status: {
         type: String,
         enum: ["pending", "contacted", "completed"],
         default: "pending",
       },
     },
-
     create_time: {
       type: Date,
       default: Date.now,
@@ -87,8 +115,9 @@ const bookingOrderSchema = new mongoose.Schema(
   }
 );
 
-// Generate confirmation code
+// Middleware để xử lý trước khi lưu
 bookingOrderSchema.pre("save", function (next) {
+  // Tạo confirmationCode nếu chưa có
   if (!this.confirmationCode) {
     this.confirmationCode =
       "BK" +
@@ -96,12 +125,17 @@ bookingOrderSchema.pre("save", function (next) {
       Math.random().toString(36).substr(2, 4).toUpperCase();
   }
 
-  // Calculate remaining amount
+  // Tính remainingAmount
   this.remainingAmount = this.amount - this.totalPaid;
 
-  // Set confirmed timestamp
+  // Đặt confirmedAt khi trạng thái chuyển sang confirmed
   if (this.status === "confirmed" && !this.confirmedAt) {
     this.confirmedAt = new Date();
+  }
+
+  // Đặt cancelledAt khi trạng thái chuyển sang cancelled
+  if (this.status === "cancelled" && !this.cancelledAt) {
+    this.cancelledAt = new Date();
   }
 
   next();

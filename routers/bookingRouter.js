@@ -1,25 +1,33 @@
 const express = require("express");
-const router = express.Router();
-const bookingController = require("../controller/bookingController");
-const auth = require("../middleware/authMiddleware");
 
+const {
+  createRoomBooking,
+  cancelBooking,
+  confirmBooking,
+  createConsultation,
+  getBookingDetail,
+  getBookingWithTransactions,
+  getCustomerBookings,
+  getRooms,
+  updateCustomerInfo,
+  updateBookingStatus,
+  rejectBooking,
+} = require("../controller/bookingController");
+const { veryfiToken } = require("../middleware/authMiddleware");
+const router = express.Router();
 // Existing routes
-router.post("/rooms", auth, bookingController.createRoomBooking);
-router.post("/consultation", auth, bookingController.createConsultation);
-router.get("/customer", auth, bookingController.getCustomerBookings);
-router.get("/:bookingId", auth, bookingController.getBookingDetail);
-router.get("/rooms/available", auth, bookingController.getRooms);
-router.put("/customer/info", auth, bookingController.updateCustomerInfo);
-router.patch("/:bookingId/cancel", auth, bookingController.cancelBooking);
+router.post("/rooms", veryfiToken, createRoomBooking);
+router.post("/consultation", veryfiToken, createConsultation);
+router.get("/customer", veryfiToken, getCustomerBookings);
+router.get("/:bookingId", veryfiToken, getBookingDetail);
+router.get("/rooms/available", veryfiToken, getRooms);
+router.put("/customer/info", veryfiToken, updateCustomerInfo);
+router.patch("/:bookingId/cancel", veryfiToken, cancelBooking);
 
 // NEW ROUTES
-router.patch("/:id/status", auth, bookingController.updateBookingStatus);
-router.patch("/:id/confirm", auth, bookingController.confirmBooking);
-router.patch("/:id/reject", auth, bookingController.rejectBooking);
-router.get(
-  "/:id/transactions",
-  auth,
-  bookingController.getBookingWithTransactions
-);
+router.patch("/:id/status", veryfiToken, updateBookingStatus);
+router.patch("/:id/confirm", veryfiToken, confirmBooking);
+router.patch("/:id/reject", veryfiToken, rejectBooking);
+router.get("/:id/transactions", veryfiToken, getBookingWithTransactions);
 
 module.exports = router;

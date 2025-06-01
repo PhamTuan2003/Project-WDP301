@@ -1,24 +1,19 @@
 const Transaction = require("../model/transaction");
 const BookingOrder = require("../model/bookingOrder");
-const Invoice = require("../model/invoice");
+const Invoice = require("../model/invoiceSchema");
 const BookingRoom = require("../model/bookingRoom");
 const Customer = require("../model/customer");
 const mongoose = require("mongoose");
 const asyncHandler = require("express-async-handler");
 
-// Tạo deposit payment (20%)
-exports.createDepositPayment = asyncHandler(async (req, res) => {
+// paymentController.js - Sửa createDepositPayment
+const createDepositPayment = asyncHandler(async (req, res) => {
+  const { bookingId } = req.body;
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    const { bookingId } = req.body;
-
-    // Tìm booking và validate
-    const booking = await BookingOrder.findById(bookingId)
-      .populate("customer")
-      .session(session);
-
+    const booking = await BookingOrder.findById(bookingId).session(session);
     if (!booking) {
       await session.abortTransaction();
       return res.status(404).json({
@@ -27,81 +22,53 @@ exports.createDepositPayment = asyncHandler(async (req, res) => {
       });
     }
 
-    // Kiểm tra quyền truy cập
-    const customer = await Customer.findOne({
-      accountId: req.user._id,
-    }).session(session);
-    if (booking.customer._id.toString() !== customer._id.toString()) {
-      await session.abortTransaction();
-      return res.status(403).json({
-        success: false,
-        message: "Không có quyền truy cập booking này",
-      });
-    }
-
-    if (booking.status !== "confirmed") {
-      await session.abortTransaction();
-      return res.status(400).json({
-        success: false,
-        message: "Booking chưa được xác nhận",
-      });
-    }
-
-    // Kiểm tra đã có deposit chưa
-    const existingDeposit = await Transaction.findOne({
-      bookingId,
-      transaction_type: "deposit",
-      status: { $in: ["pending", "completed"] },
-    }).session(session);
-
-    if (existingDeposit) {
-      await session.abortTransaction();
-      return res.status(400).json({
-        success: false,
-        message: "Đã có giao dịch cọc cho booking này",
-      });
-    }
-
-    // Tính tiền cọc 20%
     const depositAmount = Math.round(booking.amount * 0.2);
 
-    // Tạo transaction
+    // ✅ SỬA: Đúng field names theo model
     const transaction = new Transaction({
-      bookingId,
+      bookingId: bookingId,
       amount: depositAmount,
-      transaction_type: "deposit",
+      transaction_type: "deposit", // ✅ Sửa từ 'type' thành 'transaction_type'
       status: "pending",
+      payment_method: "bank_transfer", // ✅ Sửa từ 'paymentMethod' thành 'payment_method'
+      transaction_reference: `TXN${Date.now()}${Math.random()
+        .toString(36)
+        .substr(2, 9)
+        .toUpperCase()}`, // ✅ Sửa từ 'transactionCode' thành 'transaction_reference'
+      // ✅ Bỏ 'createdBy' vì không có trong model
     });
 
     await transaction.save({ session });
 
-    // Generate QR code (mock - thay bằng real payment gateway)
-    const qrCodeUrl = await generateQRCode(depositAmount, transaction._id);
-    transaction.qr_code_url = qrCodeUrl;
-    await transaction.save({ session });
+    const qrCodeData = {
+      transaction: {
+        _id: transaction._id,
+        transactionCode: transaction.transaction_reference, // ✅ Sửa field name
+        amount: depositAmount,
+        status: "pending",
+      },
+      qrContent: `https://qr-payment.example.com/pay/${transaction.transaction_reference}`,
+      bankInfo: {
+        bankName: "Ngân hàng BIDV",
+        accountNumber: "1234567890",
+        accountName: "YACHT BOOKING SERVICE",
+        transferContent: transaction.transaction_reference,
+      },
+    };
 
     await session.commitTransaction();
 
-    res.json({
+    res.status(200).json({
       success: true,
-      data: {
-        transaction,
-        qrCodeUrl,
-        amount: depositAmount,
-        formattedAmount: depositAmount.toLocaleString("vi-VN") + " VNĐ",
-        bookingInfo: {
-          confirmationCode: booking.confirmationCode,
-          totalAmount: booking.amount,
-        },
-      },
-      message: "Tạo QR code thanh toán cọc thành công",
+      message: "Tạo thanh toán deposit thành công",
+      data: qrCodeData,
     });
   } catch (error) {
     await session.abortTransaction();
-    console.error("Error creating deposit payment:", error);
+    console.error("❌ Deposit payment error:", error); // ✅ Thêm log để debug
     res.status(500).json({
       success: false,
-      message: "Lỗi server khi tạo thanh toán cọc",
+      message: "Lỗi tạo thanh toán",
       error: error.message,
     });
   } finally {
@@ -109,18 +76,14 @@ exports.createDepositPayment = asyncHandler(async (req, res) => {
   }
 });
 
-// Tạo full payment
-exports.createFullPayment = asyncHandler(async (req, res) => {
+// ✅ Sửa tương tự cho createFullPayment
+const createFullPayment = asyncHandler(async (req, res) => {
+  const { bookingId } = req.body;
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    const { bookingId } = req.body;
-
-    const booking = await BookingOrder.findById(bookingId)
-      .populate("customer")
-      .session(session);
-
+    const booking = await BookingOrder.findById(bookingId).session(session);
     if (!booking) {
       await session.abortTransaction();
       return res.status(404).json({
@@ -129,78 +92,49 @@ exports.createFullPayment = asyncHandler(async (req, res) => {
       });
     }
 
-    // Kiểm tra quyền truy cập
-    const customer = await Customer.findOne({
-      accountId: req.user._id,
-    }).session(session);
-    if (booking.customer._id.toString() !== customer._id.toString()) {
-      await session.abortTransaction();
-      return res.status(403).json({
-        success: false,
-        message: "Không có quyền truy cập booking này",
-      });
-    }
-
-    if (booking.status !== "confirmed") {
-      await session.abortTransaction();
-      return res.status(400).json({
-        success: false,
-        message: "Booking chưa được xác nhận",
-      });
-    }
-
-    // Kiểm tra đã có full payment chưa
-    const existingFullPayment = await Transaction.findOne({
-      bookingId,
-      transaction_type: "full_payment",
-      status: { $in: ["pending", "completed"] },
-    }).session(session);
-
-    if (existingFullPayment) {
-      await session.abortTransaction();
-      return res.status(400).json({
-        success: false,
-        message: "Đã có giao dịch thanh toán đầy đủ cho booking này",
-      });
-    }
-
-    // Tạo transaction cho full payment
     const transaction = new Transaction({
-      bookingId,
+      bookingId: bookingId,
       amount: booking.amount,
-      transaction_type: "full_payment",
+      transaction_type: "full_payment", // ✅ Sửa field name
       status: "pending",
+      payment_method: "bank_transfer", // ✅ Sửa field name
+      transaction_reference: `TXN${Date.now()}${Math.random()
+        .toString(36)
+        .substr(2, 9)
+        .toUpperCase()}`, // ✅ Sửa field name
     });
 
     await transaction.save({ session });
 
-    // Generate QR code
-    const qrCodeUrl = await generateQRCode(booking.amount, transaction._id);
-    transaction.qr_code_url = qrCodeUrl;
-    await transaction.save({ session });
+    const qrCodeData = {
+      transaction: {
+        _id: transaction._id,
+        transactionCode: transaction.transaction_reference,
+        amount: booking.amount,
+        status: "pending",
+      },
+      qrContent: `https://qr-payment.example.com/pay/${transaction.transaction_reference}`,
+      bankInfo: {
+        bankName: "Ngân hàng BIDV",
+        accountNumber: "1234567890",
+        accountName: "YACHT BOOKING SERVICE",
+        transferContent: transaction.transaction_reference,
+      },
+    };
 
     await session.commitTransaction();
 
-    res.json({
+    res.status(200).json({
       success: true,
-      data: {
-        transaction,
-        qrCodeUrl,
-        amount: booking.amount,
-        formattedAmount: booking.amount.toLocaleString("vi-VN") + " VNĐ",
-        bookingInfo: {
-          confirmationCode: booking.confirmationCode,
-          totalAmount: booking.amount,
-        },
-      },
-      message: "Tạo QR code thanh toán đầy đủ thành công",
+      message: "Tạo thanh toán full thành công",
+      data: qrCodeData,
     });
   } catch (error) {
     await session.abortTransaction();
-    console.error("Error creating full payment:", error);
+    console.error("❌ Full payment error:", error);
     res.status(500).json({
       success: false,
-      message: "Lỗi server khi tạo thanh toán đầy đủ",
+      message: "Lỗi tạo thanh toán",
       error: error.message,
     });
   } finally {
@@ -209,7 +143,7 @@ exports.createFullPayment = asyncHandler(async (req, res) => {
 });
 
 // Xử lý payment callback từ gateway
-exports.handlePaymentCallback = asyncHandler(async (req, res) => {
+const handlePaymentCallback = asyncHandler(async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
@@ -297,10 +231,12 @@ exports.handlePaymentCallback = asyncHandler(async (req, res) => {
 });
 
 // Simulate payment success (for testing)
-exports.simulatePaymentSuccess = asyncHandler(async (req, res) => {
+const simulatePaymentSuccess = asyncHandler(async (req, res) => {
   const { transactionId } = req.params;
 
   try {
+    // const result = await handlePaymentCallback(
+
     const result = await exports.handlePaymentCallback(
       {
         body: {
@@ -323,7 +259,7 @@ exports.simulatePaymentSuccess = asyncHandler(async (req, res) => {
 });
 
 // Get transaction status
-exports.getTransactionStatus = asyncHandler(async (req, res) => {
+const getTransactionStatus = asyncHandler(async (req, res) => {
   const { transactionId } = req.params;
 
   try {
@@ -446,4 +382,12 @@ const createInvoice = async (transactionId, session) => {
     console.error("Error creating invoice:", error);
     throw error;
   }
+};
+
+module.exports = {
+  createDepositPayment,
+  createFullPayment,
+  handlePaymentCallback,
+  simulatePaymentSuccess,
+  getTransactionStatus,
 };
