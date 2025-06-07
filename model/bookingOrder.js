@@ -49,6 +49,7 @@ const bookingOrderSchema = new mongoose.Schema(
       enum: [
         "consultation_requested",
         "consultation_sent",
+        "pending_payment",
         "confirmed",
         "completed",
         "cancelled",
@@ -104,6 +105,7 @@ const bookingOrderSchema = new mongoose.Schema(
     // Tracking timestamps
     consultationRequestedAt: Date,
     consultationSentAt: Date,
+    paymentPendingAt: Date,
     cancelledAt: Date,
     confirmedAt: Date,
 
@@ -204,13 +206,19 @@ bookingOrderSchema.pre("save", function (next) {
     const random = Math.random().toString(36).substr(2, 4).toUpperCase();
     this.bookingCode = `${prefix}${timestamp}${random}`;
   }
-
-  // Tạo confirmation code khi confirmed
-  if (!this.confirmationCode && this.status === "confirmed") {
+  if (
+    this.isModified("status") &&
+    this.status === "confirmed" &&
+    !this.confirmationCode
+  ) {
     this.confirmationCode =
       "CNF" +
       Date.now().toString().slice(-8) +
       Math.random().toString(36).substr(2, 4).toUpperCase();
+    if (!this.confirmedAt) {
+      // Chỉ set nếu chưa có
+      this.confirmedAt = new Date();
+    }
   }
 
   // Tính toán payment breakdown
@@ -222,32 +230,37 @@ bookingOrderSchema.pre("save", function (next) {
     this.amount - this.paymentBreakdown.totalPaid;
 
   // Set modification deadline (7 days before check-in)
-  if (!this.modificationDeadline && this.checkInDate) {
+  if (
+    !this.modificationDeadline &&
+    this.checkInDate &&
+    this.status === "confirmed"
+  ) {
     this.modificationDeadline = new Date(
       this.checkInDate.getTime() - 7 * 24 * 60 * 60 * 1000
     );
   }
 
-  // Set timestamps
-  if (this.status === "confirmed" && !this.confirmedAt) {
-    this.confirmedAt = new Date();
+  // Set timestamps dựa trên thay đổi trạng thái
+  if (this.isModified("status")) {
+    if (this.status === "pending_payment" && !this.paymentPendingAt) {
+      this.paymentPendingAt = new Date();
+    }
+    if (this.status === "cancelled" && !this.cancelledAt) {
+      this.cancelledAt = new Date();
+    }
   }
 
-  if (this.status === "cancelled" && !this.cancelledAt) {
-    this.cancelledAt = new Date();
+  if (this.isModified("consultationStatus")) {
+    if (
+      this.consultationStatus === "requested" &&
+      !this.consultationRequestedAt
+    ) {
+      this.consultationRequestedAt = new Date();
+    }
+    if (this.consultationStatus === "sent" && !this.consultationSentAt) {
+      this.consultationSentAt = new Date();
+    }
   }
-
-  if (
-    this.consultationStatus === "requested" &&
-    !this.consultationRequestedAt
-  ) {
-    this.consultationRequestedAt = new Date();
-  }
-
-  if (this.consultationStatus === "sent" && !this.consultationSentAt) {
-    this.consultationSentAt = new Date();
-  }
-
   next();
 });
 

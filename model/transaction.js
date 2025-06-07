@@ -50,44 +50,20 @@ const transactionSchema = new mongoose.Schema(
     // Cải thiện payment methods
     payment_method: {
       type: String,
-      enum: ["vnpay", "momo", "bank_transfer", "cash", "card"],
+      enum: ["vnpay", "momo", "bank_transfer", "cash", "card", "unknown"],
       required: true,
     },
 
     // Chi tiết response từ các gateways
     gateway_response: {
       // VNPay response
-      vnpay: {
-        vnp_TxnRef: String,
-        vnp_OrderInfo: String,
-        vnp_PaymentUrl: String,
-        vnp_ResponseCode: String,
-        vnp_TransactionNo: String,
-        vnp_BankCode: String,
-        vnp_SecureHash: String,
-      },
+      vnpay: { type: mongoose.Schema.Types.Mixed, default: {} },
 
       // MoMo response
-      momo: {
-        orderId: String,
-        requestId: String,
-        payUrl: String,
-        qrCodeUrl: String,
-        transId: String,
-        resultCode: Number,
-        message: String,
-      },
+      momo: { type: mongoose.Schema.Types.Mixed, default: {} },
 
       // Bank transfer info
-      bank: {
-        bankCode: String,
-        bankName: String,
-        accountNumber: String,
-        accountName: String,
-        transferContent: String,
-        qrCode: String,
-        swiftCode: String,
-      },
+      bank: { type: mongoose.Schema.Types.Mixed, default: {} },
     },
 
     transaction_reference: {
@@ -158,6 +134,13 @@ const transactionSchema = new mongoose.Schema(
       affiliateId: String,
       promotionCode: String,
     },
+    gatewayInteraction: {
+      requestPayload: mongoose.Schema.Types.Mixed, // Payload bạn gửi đi
+      returnUrlRawQuery: String, // Query string gốc từ returnUrl
+      returnUrlVerifiedPayload: mongoose.Schema.Types.Mixed, // Payload đã xác thực từ returnUrl
+      ipnRawBody: String, // Body gốc từ IPN
+      ipnVerifiedPayload: mongoose.Schema.Types.Mixed, // Payload đã xác thực từ IPN
+    },
   },
   {
     timestamps: true,
@@ -167,19 +150,29 @@ const transactionSchema = new mongoose.Schema(
 // Generate transaction reference
 transactionSchema.pre("save", function (next) {
   if (!this.transaction_reference) {
-    const prefix = this.payment_method.toUpperCase().substring(0, 3);
-    const timestamp = Date.now();
+    const prefix = this.payment_method
+      ? this.payment_method.toUpperCase().substring(0, 3)
+      : "TRN";
+    const timestamp = Date.now().toString(); // Sử dụng timestamp đầy đủ hơn
     const random = Math.random().toString(36).substr(2, 6).toUpperCase();
-    this.transaction_reference = `${prefix}${timestamp}${random}`;
+    this.transaction_reference = `${prefix}${timestamp.slice(-8)}${random}`;
   }
 
   // Set expiration cho QR codes (15 phút)
-  if (!this.expiredAt && ["vnpay", "momo"].includes(this.payment_method)) {
+  if (
+    !this.expiredAt &&
+    (this.payment_method === "vnpay" || this.payment_method === "momo") &&
+    this.status === "pending"
+  ) {
     this.expiredAt = new Date(Date.now() + 15 * 60 * 1000);
   }
 
   // Set expiration cho bank transfer (24 giờ)
-  if (!this.expiredAt && this.payment_method === "bank_transfer") {
+  if (
+    !this.expiredAt &&
+    this.payment_method === "bank_transfer" &&
+    this.status === "pending"
+  ) {
     this.expiredAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
   }
 

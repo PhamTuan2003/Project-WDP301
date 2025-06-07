@@ -1,38 +1,84 @@
 const Invoice = require("../model/invoiceSchema");
-const Transaction = require("../model/transaction");
-const Customer = require("../model/customer");
+const Customer = require("../model/customer"); // For authorization
 const PDFDocument = require("pdfkit");
 const asyncHandler = require("express-async-handler");
+const mongoose = require("mongoose"); // For ObjectId validation
 
-// Lấy invoice theo transaction ID
+// Lấy invoice theo transaction ID (Mongoose ObjectId)
 const getInvoiceByTransaction = asyncHandler(async (req, res) => {
   const { transactionId } = req.params;
 
+  console.log("[getInvoiceByTransaction] transactionId param:", transactionId);
+
+  if (!mongoose.Types.ObjectId.isValid(transactionId)) {
+    console.log("[getInvoiceByTransaction] Invalid ObjectId:", transactionId);
+    return res
+      .status(400)
+      .json({ success: false, message: "Transaction ID không hợp lệ." });
+  }
+
   try {
-    const invoice = await Invoice.findOne({ transactionId })
+    const invoice = await Invoice.findOne({ transactionId: transactionId })
       .populate({
         path: "bookingId",
+        select:
+          "bookingCode confirmationCode customer yacht schedule checkInDate customerInfo",
         populate: [
-          { path: "customer" },
-          { path: "yacht" },
-          { path: "schedule" },
+          { path: "customer", select: "fullName email phoneNumber address" },
+          { path: "yacht", select: "name location" },
+          { path: "schedule", select: "startDate endDate" },
         ],
       })
-      .populate("transactionId");
+      .populate(
+        "transactionId",
+        "transaction_reference transaction_type status completedAt amount payment_method"
+      );
 
     if (!invoice) {
+      console.log(
+        "[getInvoiceByTransaction] Invoice NOT FOUND for transactionId:",
+        transactionId
+      );
+      // Thử log tất cả invoice có transactionId là gì
+      const allInvoices = await Invoice.find({}, "_id transactionId");
+      console.log(
+        "[getInvoiceByTransaction] All invoice transactionIds:",
+        allInvoices.map((i) => i.transactionId)
+      );
       return res.status(404).json({
         success: false,
-        message: "Invoice không tồn tại",
+        message: "Invoice không tồn tại cho transaction ID này.",
       });
     }
 
-    // Kiểm tra quyền truy cập
-    const customer = await Customer.findOne({ accountId: req.user._id });
-    if (invoice.bookingId.customer._id.toString() !== customer._id.toString()) {
+    // Authorization
+    let canAccess = false;
+    if (req.user.role === "admin") {
+      canAccess = true;
+    } else if (invoice.bookingId && invoice.bookingId.customer) {
+      // Check against original customer of the booking
+      const customer = await Customer.findOne({ accountId: req.user._id });
+      if (
+        customer &&
+        invoice.bookingId.customer._id.toString() === customer._id.toString()
+      ) {
+        canAccess = true;
+      }
+    } else if (invoice.customerInfo && invoice.customerInfo.customerId) {
+      // Fallback to customerId on invoice itself
+      const customer = await Customer.findOne({ accountId: req.user._id });
+      if (
+        customer &&
+        invoice.customerInfo.customerId.toString() === customer._id.toString()
+      ) {
+        canAccess = true;
+      }
+    }
+
+    if (!canAccess) {
       return res.status(403).json({
         success: false,
-        message: "Không có quyền truy cập invoice này",
+        message: "Không có quyền truy cập invoice này.",
       });
     }
 
@@ -44,27 +90,38 @@ const getInvoiceByTransaction = asyncHandler(async (req, res) => {
     console.error("Error getting invoice by transaction:", error);
     res.status(500).json({
       success: false,
-      message: "Lỗi server khi lấy invoice",
+      message: "Lỗi server khi lấy invoice.",
       error: error.message,
     });
   }
 });
 
-// Lấy invoice theo ID
+// Lấy invoice theo ID (Invoice's Mongoose ObjectId)
 const getInvoiceById = asyncHandler(async (req, res) => {
   const { id } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res
+      .status(400)
+      .json({ success: false, message: "Invoice ID không hợp lệ." });
+  }
 
   try {
     const invoice = await Invoice.findById(id)
       .populate({
         path: "bookingId",
+        select:
+          "bookingCode confirmationCode customer yacht schedule checkInDate customerInfo",
         populate: [
-          { path: "customer" },
-          { path: "yacht" },
-          { path: "schedule" },
+          { path: "customer", select: "fullName email phoneNumber address" },
+          { path: "yacht", select: "name location" },
+          { path: "schedule", select: "startDate endDate" },
         ],
       })
-      .populate("transactionId");
+      .populate(
+        "transactionId",
+        "transaction_reference transaction_type status completedAt amount payment_method"
+      );
 
     if (!invoice) {
       return res.status(404).json({
@@ -73,9 +130,29 @@ const getInvoiceById = asyncHandler(async (req, res) => {
       });
     }
 
-    // Kiểm tra quyền truy cập
-    const customer = await Customer.findOne({ accountId: req.user._id });
-    if (invoice.bookingId.customer._id.toString() !== customer._id.toString()) {
+    // Authorization (similar to above)
+    let canAccess = false;
+    if (req.user.role === "admin") {
+      canAccess = true;
+    } else if (invoice.bookingId && invoice.bookingId.customer) {
+      const customer = await Customer.findOne({ accountId: req.user._id });
+      if (
+        customer &&
+        invoice.bookingId.customer._id.toString() === customer._id.toString()
+      ) {
+        canAccess = true;
+      }
+    } else if (invoice.customerInfo && invoice.customerInfo.customerId) {
+      const customer = await Customer.findOne({ accountId: req.user._id });
+      if (
+        customer &&
+        invoice.customerInfo.customerId.toString() === customer._id.toString()
+      ) {
+        canAccess = true;
+      }
+    }
+
+    if (!canAccess) {
       return res.status(403).json({
         success: false,
         message: "Không có quyền truy cập invoice này",
@@ -96,21 +173,31 @@ const getInvoiceById = asyncHandler(async (req, res) => {
   }
 });
 
-// Download PDF invoice
 const downloadInvoicePDF = asyncHandler(async (req, res) => {
   const { id } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res
+      .status(400)
+      .json({ success: false, message: "Invoice ID không hợp lệ." });
+  }
 
   try {
     const invoice = await Invoice.findById(id)
       .populate({
         path: "bookingId",
+        select:
+          "bookingCode confirmationCode customer yacht schedule checkInDate customerInfo",
         populate: [
-          { path: "customer" },
-          { path: "yacht" },
-          { path: "schedule" },
+          { path: "customer", select: "fullName email phoneNumber address" }, // For fallback if invoice.customerInfo is minimal
+          { path: "yacht", select: "name location" },
+          { path: "schedule", select: "startDate endDate" },
         ],
       })
-      .populate("transactionId");
+      .populate(
+        "transactionId",
+        "transaction_reference transaction_type status completedAt amount payment_method"
+      );
 
     if (!invoice) {
       return res.status(404).json({
@@ -119,184 +206,307 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
       });
     }
 
-    // Kiểm tra quyền truy cập
-    const customer = await Customer.findOne({ accountId: req.user._id });
-    if (invoice.bookingId.customer._id.toString() !== customer._id.toString()) {
+    // Authorization (similar to above)
+    let canAccess = false;
+    if (req.user.role === "admin") {
+      canAccess = true;
+    } else if (invoice.bookingId && invoice.bookingId.customer) {
+      const customer = await Customer.findOne({ accountId: req.user._id });
+      if (
+        customer &&
+        invoice.bookingId.customer._id.toString() === customer._id.toString()
+      ) {
+        canAccess = true;
+      }
+    } else if (invoice.customerInfo && invoice.customerInfo.customerId) {
+      const customer = await Customer.findOne({ accountId: req.user._id });
+      if (
+        customer &&
+        invoice.customerInfo.customerId.toString() === customer._id.toString()
+      ) {
+        canAccess = true;
+      }
+    }
+
+    if (!canAccess) {
       return res.status(403).json({
         success: false,
         message: "Không có quyền truy cập invoice này",
       });
     }
 
-    // Tạo PDF
-    const doc = new PDFDocument();
-    const filename = `invoice-${invoice.invoiceNumber}.pdf`;
+    const doc = new PDFDocument({ margin: 50, size: "A4" });
+    const filename = `invoice-${invoice.invoiceNumber || id}.pdf`;
 
     res.setHeader("Content-disposition", `attachment; filename="${filename}"`);
     res.setHeader("Content-type", "application/pdf");
 
     doc.pipe(res);
 
+    // Register a common font that supports Vietnamese
+    // Ensure you have a font file like 'Roboto-Regular.ttf' in your project
+    // doc.font('path/to/your/font/Roboto-Regular.ttf'); // Example
+
     // Header
-    doc.fontSize(20).text("HÓA ĐƠN THANH TOÁN", 50, 50, { align: "center" });
+    doc.fontSize(18).text("HÓA ĐƠN THANH TOÁN", { align: "center" });
+    doc.moveDown(1.5);
+
+    // Invoice Info & Company Info side-by-side
+    const infoTopY = doc.y;
+    doc.fontSize(10);
+    doc.text(`Số HĐ: ${invoice.invoiceNumber}`, { continued: false });
+    doc.text(
+      `Ngày PH: ${invoice.issueDate?.toLocaleDateString("vi-VN") || "N/A"}`
+    );
+    if (invoice.bookingId?.bookingCode) {
+      doc.text(`Mã Booking: ${invoice.bookingId.bookingCode}`);
+    }
+    if (invoice.bookingId?.confirmationCode) {
+      doc.text(`Mã Xác Nhận: ${invoice.bookingId.confirmationCode}`);
+    }
+    doc.moveDown();
+    doc.text(invoice.companyInfo?.name || "YACHT BOOKING COMPANY", {
+      underline: true,
+    });
+    doc.text(invoice.companyInfo?.address || "123 Ocean Drive, Paradise City");
+    doc.text(`Tel: ${invoice.companyInfo?.phone || "0123 456 789"}`);
+    doc.text(
+      `Email: ${invoice.companyInfo?.email || "contact@yachtbooking.com"}`
+    );
+
+    // Customer Info (right side)
+    const customerX = 320;
+    doc
+      .fontSize(10)
+      .text("THÔNG TIN KHÁCH HÀNG:", customerX, infoTopY, { underline: true });
+    doc.text(
+      `Tên: ${invoice.customerInfo?.fullName || "N/A"}`,
+      customerX,
+      doc.y
+    );
+    doc.text(
+      `Email: ${invoice.customerInfo?.email || "N/A"}`,
+      customerX,
+      doc.y
+    );
+    doc.text(
+      `SĐT: ${invoice.customerInfo?.phoneNumber || "N/A"}`,
+      customerX,
+      doc.y
+    );
+    if (invoice.customerInfo?.address) {
+      doc.text(`Địa chỉ: ${invoice.customerInfo.address}`, customerX, doc.y, {
+        width: 230,
+      });
+    }
+    doc.moveDown(2);
+
+    // Yacht & Schedule Info
+    const yachtInfoY = Math.max(doc.y, doc.y); // Ensure it's below both columns
+    doc.x = 50; // Reset x position
+    doc.y = yachtInfoY;
+    doc.fontSize(10).text("THÔNG TIN DỊCH VỤ:", { underline: true });
+    if (invoice.yachtInfo?.name) {
+      doc.text(`Du thuyền: ${invoice.yachtInfo.name}`);
+    }
+    if (invoice.yachtInfo?.checkInDate) {
+      doc.text(
+        `Ngày đi: ${new Date(invoice.yachtInfo.checkInDate).toLocaleDateString(
+          "vi-VN"
+        )}`
+      );
+    }
+    if (invoice.yachtInfo?.scheduleInfo) {
+      doc.text(`Lịch trình: ${invoice.yachtInfo.scheduleInfo}`);
+    }
     doc.moveDown();
 
-    // Invoice info
-    doc.fontSize(12);
-    doc.text(`Số hóa đơn: ${invoice.invoiceNumber}`, 50, 100);
-    doc.text(
-      `Ngày phát hành: ${invoice.issueDate.toLocaleDateString("vi-VN")}`,
-      50,
-      115
-    );
-    doc.text(`Mã booking: ${invoice.bookingId.confirmationCode}`, 50, 130);
+    // Items Table
+    const tableTop = doc.y;
+    const itemDescX = 50;
+    const quantityX = 300;
+    const unitPriceX = 370;
+    const totalPriceX = 460;
 
-    // Company info (left side)
-    doc.text("CÔNG TY DU THUYỀN", 50, 160);
-    doc.text("Địa chỉ: 123 Đường ABC, Quận XYZ", 50, 175);
-    doc.text("Điện thoại: 0123-456-789", 50, 190);
-    doc.text("Email: info@yacht.com", 50, 205);
-
-    // Customer info (right side)
-    doc.text("THÔNG TIN KHÁCH HÀNG:", 300, 160);
-    doc.text(`Tên: ${invoice.customerInfo.fullName}`, 300, 175);
-    doc.text(`Email: ${invoice.customerInfo.email}`, 300, 190);
-    doc.text(`SĐT: ${invoice.customerInfo.phoneNumber}`, 300, 205);
-    if (invoice.customerInfo.address) {
-      doc.text(`Địa chỉ: ${invoice.customerInfo.address}`, 300, 220);
+    doc.fontSize(10);
+    function addRowHeader(y) {
+      doc.text("Mô tả dịch vụ", itemDescX, y, {
+        width: quantityX - itemDescX - 10,
+      });
+      doc.text("SL", quantityX, y, {
+        width: unitPriceX - quantityX - 10,
+        align: "right",
+      });
+      doc.text("Đơn giá (VNĐ)", unitPriceX, y, {
+        width: totalPriceX - unitPriceX - 10,
+        align: "right",
+      });
+      doc.text("Thành tiền (VNĐ)", totalPriceX, y, {
+        width: 500 - totalPriceX + 40,
+        align: "right",
+      }); // page width - x - margin
+      doc
+        .moveTo(50, y + 15)
+        .lineTo(550, y + 15)
+        .stroke();
     }
 
-    // Yacht info
-    if (invoice.yachtInfo.name) {
-      doc.text(`Du thuyền: ${invoice.yachtInfo.name}`, 50, 240);
-      if (invoice.yachtInfo.location) {
-        doc.text(`Địa điểm: ${invoice.yachtInfo.location}`, 50, 255);
+    addRowHeader(tableTop);
+    let currentY = tableTop + 20;
+
+    invoice.items.forEach((item) => {
+      if (currentY > 700) {
+        // Page break logic
+        doc.addPage();
+        currentY = 50;
+        addRowHeader(currentY);
+        currentY += 20;
       }
-      if (invoice.yachtInfo.scheduleInfo) {
-        doc.text(`Lịch trình: ${invoice.yachtInfo.scheduleInfo}`, 50, 270);
-      }
-    }
-
-    // Items table
-    let yPosition = 300;
-    doc.text("CHI TIẾT DỊCH VỤ:", 50, yPosition);
-    yPosition += 20;
-
-    // Table header
-    doc.rect(50, yPosition, 500, 20).fill("#f0f0f0");
-    doc.fillColor("black");
-    doc.text("STT", 60, yPosition + 5);
-    doc.text("Tên phòng", 100, yPosition + 5);
-    doc.text("SL", 250, yPosition + 5);
-    doc.text("Đơn giá", 300, yPosition + 5);
-    doc.text("Thành tiền", 450, yPosition + 5);
-    yPosition += 25;
-
-    // Table rows
-    invoice.items.forEach((item, index) => {
-      doc.text(`${index + 1}`, 60, yPosition);
-      doc.text(item.roomName, 100, yPosition);
-      doc.text(item.quantity.toString(), 250, yPosition);
-      doc.text(item.unitPrice.toLocaleString("vi-VN"), 300, yPosition);
-      doc.text(item.totalPrice.toLocaleString("vi-VN"), 450, yPosition);
-      yPosition += 20;
+      doc.text(item.name, itemDescX, currentY, {
+        width: quantityX - itemDescX - 10,
+      });
+      doc.text(item.quantity.toString(), quantityX, currentY, {
+        width: unitPriceX - quantityX - 10,
+        align: "right",
+      });
+      doc.text(
+        item.unitPrice?.toLocaleString("vi-VN") || "0",
+        unitPriceX,
+        currentY,
+        { width: totalPriceX - unitPriceX - 10, align: "right" }
+      );
+      doc.text(
+        item.totalPrice?.toLocaleString("vi-VN") || "0",
+        totalPriceX,
+        currentY,
+        { width: 500 - totalPriceX + 40, align: "right" }
+      );
+      currentY += 20;
     });
+    doc.moveTo(50, currentY).lineTo(550, currentY).stroke();
+    currentY += 10;
 
-    // Totals
-    yPosition += 20;
+    // Financial Summary
+    const financialsStartX = 350;
+    doc.fontSize(10);
+    doc.text(`Tạm tính:`, financialsStartX, currentY, { align: "left" });
     doc.text(
-      `Tạm tính: ${invoice.subtotal.toLocaleString("vi-VN")} VNĐ`,
-      350,
-      yPosition
+      `${invoice.financials?.subtotal?.toLocaleString("vi-VN") || "0"} VNĐ`,
+      totalPriceX,
+      currentY,
+      { align: "right" }
     );
+    currentY += 15;
 
-    if (invoice.discount > 0) {
-      yPosition += 15;
+    if (invoice.financials?.totalDiscount > 0) {
+      doc.text(`Giảm giá:`, financialsStartX, currentY, { align: "left" });
       doc.text(
-        `Giảm giá: ${invoice.discount.toLocaleString("vi-VN")} VNĐ`,
-        350,
-        yPosition
+        `${invoice.financials.totalDiscount.toLocaleString("vi-VN")} VNĐ`,
+        totalPriceX,
+        currentY,
+        { align: "right" }
       );
+      currentY += 15;
     }
-
-    if (invoice.tax > 0) {
-      yPosition += 15;
+    if (invoice.financials?.totalTax > 0) {
+      doc.text(`Thuế (VAT):`, financialsStartX, currentY, { align: "left" });
       doc.text(
-        `Thuế: ${invoice.tax.toLocaleString("vi-VN")} VNĐ`,
-        350,
-        yPosition
+        `${invoice.financials.totalTax.toLocaleString("vi-VN")} VNĐ`,
+        totalPriceX,
+        currentY,
+        { align: "right" }
       );
+      currentY += 15;
     }
-
-    yPosition += 15;
-    doc.fontSize(14);
+    doc.font("Helvetica-Bold"); // Or your bold Vietnamese font
+    doc.text(`TỔNG CỘNG:`, financialsStartX, currentY, { align: "left" });
     doc.text(
-      `Tổng cộng: ${invoice.total.toLocaleString("vi-VN")} VNĐ`,
-      350,
-      yPosition
+      `${invoice.financials?.total?.toLocaleString("vi-VN") || "0"} VNĐ`,
+      totalPriceX,
+      currentY,
+      { align: "right" }
     );
+    currentY += 15;
+    doc.font("Helvetica"); // Or your regular Vietnamese font
 
-    yPosition += 20;
-    doc.fontSize(12);
+    doc.text(`Đã thanh toán:`, financialsStartX, currentY, { align: "left" });
     doc.text(
-      `Đã thanh toán: ${invoice.paidAmount.toLocaleString("vi-VN")} VNĐ`,
-      350,
-      yPosition
+      `${invoice.financials?.paidAmount?.toLocaleString("vi-VN") || "0"} VNĐ`,
+      totalPriceX,
+      currentY,
+      { align: "right" }
     );
+    currentY += 15;
 
-    if (invoice.remainingAmount > 0) {
-      yPosition += 15;
+    if (invoice.financials?.remainingAmount > 0) {
+      doc.font("Helvetica-Bold");
+      doc.text(`Còn lại:`, financialsStartX, currentY, { align: "left" });
       doc.text(
-        `Còn lại: ${invoice.remainingAmount.toLocaleString("vi-VN")} VNĐ`,
-        350,
-        yPosition
+        `${invoice.financials.remainingAmount.toLocaleString("vi-VN")} VNĐ`,
+        totalPriceX,
+        currentY,
+        { align: "right" }
       );
+      doc.font("Helvetica");
+      currentY += 15;
     }
+    currentY += 10;
 
-    // Transaction info
-    yPosition += 30;
-    doc.text("THÔNG TIN GIAO DỊCH:", 50, yPosition);
-    yPosition += 15;
-    doc.text(
-      `Loại giao dịch: ${
-        invoice.transactionId.transaction_type === "deposit"
-          ? "Thanh toán cọc"
-          : "Thanh toán đầy đủ"
-      }`,
-      50,
-      yPosition
-    );
-    yPosition += 15;
-    doc.text(
-      `Mã giao dịch: ${invoice.transactionId.transaction_reference}`,
-      50,
-      yPosition
-    );
-    yPosition += 15;
-    doc.text(
-      `Ngày thanh toán: ${
-        invoice.transactionId.completedAt
-          ? invoice.transactionId.completedAt.toLocaleDateString("vi-VN")
-          : "Chưa thanh toán"
-      }`,
-      50,
-      yPosition
-    );
+    // Transaction Info
+    doc.x = 50;
+    doc.y = currentY;
+    doc.fontSize(10).text("THÔNG TIN THANH TOÁN:", { underline: true });
+    if (invoice.transactionId) {
+      doc.text(`Phương thức: ${invoice.transactionId.payment_method}`);
+      doc.text(`Mã GD: ${invoice.transactionId.transaction_reference}`);
+      doc.text(
+        `Ngày TT: ${
+          invoice.transactionId.completedAt
+            ? new Date(invoice.transactionId.completedAt).toLocaleString(
+                "vi-VN"
+              )
+            : "Chưa hoàn tất"
+        }`
+      );
+      doc.text(
+        `Trạng thái GD: ${
+          invoice.transactionId.statusDisplay || invoice.transactionId.status
+        }`
+      );
+    } else {
+      doc.text("Chưa có thông tin giao dịch liên kết.");
+    }
+    currentY = doc.y + 20;
 
     // Footer
-    yPosition += 50;
-    doc.text("Cảm ơn quý khách đã sử dụng dịch vụ!", 50, yPosition, {
-      align: "center",
-    });
+    if (currentY > 720) {
+      doc.addPage();
+      currentY = 50;
+    }
+    doc
+      .fontSize(9)
+      .text(
+        invoice.legal?.terms ||
+          "Cảm ơn quý khách đã sử dụng dịch vụ! Hẹn gặp lại.",
+        50,
+        currentY,
+        { align: "center" }
+      );
 
     doc.end();
   } catch (error) {
     console.error("Error generating PDF:", error);
-    res.status(500).json({
-      success: false,
-      message: "Lỗi server khi tạo PDF",
-      error: error.message,
-    });
+    // Ensure response is sent if headers were already set
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        message: "Lỗi server khi tạo PDF",
+        error: error.message,
+      });
+    } else {
+      // If headers sent, pdfkit might have started streaming. End the stream.
+      res.end();
+    }
   }
 });
 
@@ -311,15 +521,17 @@ const getCustomerInvoices = asyncHandler(async (req, res) => {
       });
     }
 
+    // Find invoices where customerInfo.customerId matches
     const invoices = await Invoice.find({
-      "customerInfo.email": customer.email,
+      "customerInfo.customerId": customer._id,
     })
       .populate({
         path: "bookingId",
-        populate: [{ path: "yacht", select: "name location" }],
+        select: "bookingCode yacht checkInDate", // Select only necessary for list view
+        populate: { path: "yacht", select: "name" },
       })
-      .populate("transactionId", "transaction_type status completedAt")
-      .sort({ createdAt: -1 });
+      .populate("transactionId", "transaction_type status completedAt amount")
+      .sort({ issueDate: -1 }); // Sort by issueDate typically
 
     res.json({
       success: true,
