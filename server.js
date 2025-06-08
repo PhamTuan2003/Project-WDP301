@@ -3,6 +3,7 @@ const connectDB = require("./config/db");
 const { json, urlencoded } = require("body-parser");
 const morgan = require("morgan");
 const cors = require("cors");
+const errorHandler = require("./middleware/errorHandles");
 const app = express();
 
 // Connect Database
@@ -12,7 +13,7 @@ connectDB();
 app.use(
   cors({
     origin: "http://localhost:3000",
-    methods: ["GET", "POST", "PUT", "DELETE"],
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: [
       "Content-Type",
       "Authorization",
@@ -38,9 +39,14 @@ app.use("/api/v1/yachtImages", require("./routers/yachtImageRouter"));
 
 // ROOMS ROUTES
 app.use("/api/v1/rooms", require("./routers/roomRouter"));
-
+// BOOKING ROUTES
+app.use("/api/v1/bookings", require("./routers/bookingRouter"));
+app.use("/api/v1/payments", require("./routers/paymentRouter"));
+app.use("/api/v1/invoices", require("./routers/invoiceRouter"));
 //FEEDBACK ROUTES
 app.use("/api/v1/feedback", require("./routers/feedbackRouter"));
+
+app.use(errorHandler);
 const PORT = process.env.PORT || 9999;
 
 app.listen(PORT, () =>
