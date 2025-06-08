@@ -1,4 +1,5 @@
 const express = require("express");
+const {createYacht, addServiceToYacht, addScheduleToYacht} = require('../controller/yachtController');
 const router = express.Router();
 const {
   getAllYacht,
@@ -18,5 +19,8 @@ router.get("/findboat/:id", getYachtById);
 router.get("/:id/feedbacks", getFeedbacksByYacht);
 router.get("/:id/services", getServicesByYachtId);
 router.get("/:id/schedules", getSchedulesByYacht);
+router.post('/create', upload.single('image'), createYacht);
+router.post('/add-service', addServiceToYacht);
+router.post('/add-schedule', addScheduleToYacht);
 
 module.exports = router;
