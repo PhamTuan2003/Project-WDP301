@@ -1,13 +1,13 @@
-// bookingController.js
-
 const BookingOrder = require("../model/bookingOrder");
 const BookingRoom = require("../model/bookingRoom");
 const Invoice = require("../model/invoiceSchema");
 const Transaction = require("../model/transaction");
 const Customer = require("../model/customer");
+const Yacht = require("../model/yachtSchema");
 const asyncHandler = require("express-async-handler");
 const mongoose = require("mongoose");
 const { v4: uuidv4 } = require("uuid");
+const { sendBookingConfirmationEmail } = require("../utils/sendMail");
 
 const parseGuestCount = (guestCountValue) => {
   if (typeof guestCountValue === "number") {
@@ -23,7 +23,6 @@ const parseGuestCount = (guestCountValue) => {
 };
 
 // ==================== BOOKING ROOM FUNCTIONS ====================
-// FIXED: Improve createBookingOrConsultationRequest
 exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
   console.log(
     "Starting createBookingOrConsultationRequest with body:",
@@ -268,6 +267,37 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
       }
     }
 
+    // Gửi email xác nhận theo loại booking
+    try {
+      const checkInDateStr = new Date(
+        savedBookingOrder.checkInDate
+      ).toLocaleDateString("vi-VN");
+      if (requestType === "consultation_requested") {
+        const { sendConsultationEmail } = require("../utils/sendMail");
+        await sendConsultationEmail(
+          email,
+          fullName,
+          savedBookingOrder.bookingCode,
+          checkInDateStr,
+          savedBookingOrder.guestCount,
+          requirements
+        );
+      } else if (requestType === "pending_payment") {
+        const { sendBookingConfirmationEmail } = require("../utils/sendMail");
+        await sendBookingConfirmationEmail(
+          email,
+          fullName,
+          savedBookingOrder.bookingCode,
+          checkInDateStr,
+          savedBookingOrder.guestCount,
+          savedBookingOrder.amount?.toLocaleString("vi-VN")
+        );
+      }
+    } catch (mailErr) {
+      console.error("Lỗi gửi email:", mailErr.message);
+      // Không throw lỗi này để không ảnh hưởng tới booking, chỉ log lại
+    }
+
     await session.commitTransaction();
     console.log("Transaction committed successfully");
 
@@ -420,6 +450,47 @@ exports.customerConfirmBookingAfterConsultation = asyncHandler(
       // booking.paymentPendingAt = new Date(); // pre-save hook sẽ set
 
       const savedBooking = await booking.save({ session });
+
+      // Lấy thông tin du thuyền và gửi email xác nhận đặt phòng
+      try {
+        const populatedBooking = await BookingOrder.findById(savedBooking._id)
+          .populate("yacht", "name")
+          .lean();
+        const yachtName = populatedBooking.yacht?.name || "(Không rõ)";
+        const checkInDateStr = new Date(
+          populatedBooking.checkInDate
+        ).toLocaleDateString("vi-VN");
+        // Lấy danh sách phòng đã chọn
+        const rooms = (populatedBooking.consultationData?.requestedRooms || [])
+          .map(
+            (room) =>
+              `<li>${room.name} x ${room.quantity} (${
+                room.area || "?"
+              }m²) - ${room.price?.toLocaleString("vi-VN")} VNĐ</li>`
+          )
+          .join("");
+        const roomListHtml = rooms ? `<ul>${rooms}</ul>` : "Không có";
+        const requirements = populatedBooking.requirements || "Không có";
+        const { sendBookingConfirmationEmail } = require("../utils/sendMail");
+        await sendBookingConfirmationEmail(
+          populatedBooking.customerInfo?.email || "",
+          populatedBooking.customerInfo?.fullName || "",
+          populatedBooking.bookingCode,
+          checkInDateStr,
+          populatedBooking.guestCount,
+          populatedBooking.amount?.toLocaleString("vi-VN"),
+          {
+            yachtName,
+            roomListHtml,
+            requirements,
+          }
+        );
+      } catch (mailErr) {
+        console.error(
+          "Lỗi gửi email xác nhận đặt phòng sau tư vấn:",
+          mailErr.message
+        );
+      }
 
       await session.commitTransaction();
       session.endSession();

@@ -16,6 +16,10 @@ const {
   cancelConsultationRequest,
 } = bookingController;
 const { veryfiToken } = require("../middleware/authMiddleware"); // Assuming you have this
+const {
+  sendBookingConfirmationEmail,
+  testSendMail,
+} = require("../utils/sendMail");
 
 // ==================== BOOKING CREATION & CONSULTATION ====================
 router.post("/request", veryfiToken, createBookingOrConsultationRequest);
@@ -49,4 +53,16 @@ router.get("/available-rooms", getRooms); // Đổi tên route cho rõ hơn
 
 // Khách hàng cập nhật thông tin cá nhân của họ
 router.put("/customer/my-info", veryfiToken, updateCustomerInfo);
+
+// Route test gửi email
+router.get("/test-send-mail", async (req, res) => {
+  const { to } = req.query;
+  try {
+    const info = await testSendMail(to);
+    res.json({ success: true, message: "Đã gửi email test thành công!", info });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 module.exports = router;
