@@ -1,4 +1,5 @@
-const {BookingOrder} = require('../model/bookingOrder')
+const BookingOrder = require('../model/bookingOrder')
+const BookingService = require('../model/bookingService');
 const Yacht = require('../model/yachtSchema');
 const YachtType = require('../model/yachtType');
 const Company = require('../model/company');
