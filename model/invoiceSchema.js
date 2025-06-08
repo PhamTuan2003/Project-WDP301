@@ -238,24 +238,24 @@ const invoiceSchema = new mongoose.Schema(
   }
 );
 
-// Generate invoice number
-invoiceSchema.pre("save", function (next) {
+// Generate invoice number and due date before validation
+invoiceSchema.pre("validate", function (next) {
+  if (!this.issueDate) {
+    this.issueDate = new Date();
+  }
   if (!this.invoiceNumber) {
-    const date = new Date();
+    const date = new Date(this.issueDate);
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, "0");
     const day = String(date.getDate()).padStart(2, "0");
     const timestamp = Date.now().toString().slice(-6);
     this.invoiceNumber = `INV${year}${month}${day}${timestamp}`;
   }
-
-  // Set due date if not set (30 days from issue date)
   if (!this.dueDate) {
     this.dueDate = new Date(
       this.issueDate.getTime() + 30 * 24 * 60 * 60 * 1000
     );
   }
-
   next();
 });
 

@@ -3,6 +3,7 @@ const Customer = require("../model/customer"); // For authorization
 const PDFDocument = require("pdfkit");
 const asyncHandler = require("express-async-handler");
 const mongoose = require("mongoose"); // For ObjectId validation
+const Transaction = require("../model/transaction");
 
 // Lấy invoice theo transaction ID (Mongoose ObjectId)
 const getInvoiceByTransaction = asyncHandler(async (req, res) => {
@@ -236,16 +237,20 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
     }
 
     const doc = new PDFDocument({ margin: 50, size: "A4" });
+
+    // Đăng ký font (đường dẫn tương đối từ file js)
+    doc.registerFont("Archivo", __dirname + "/../fonts/Archivo-Regular.ttf");
+    doc.registerFont("Archivo-Bold", __dirname + "/../fonts/Archivo-Bold.ttf");
+
+    // Sử dụng font cho toàn bộ file
+    doc.font("Archivo");
+
     const filename = `invoice-${invoice.invoiceNumber || id}.pdf`;
 
     res.setHeader("Content-disposition", `attachment; filename="${filename}"`);
     res.setHeader("Content-type", "application/pdf");
 
     doc.pipe(res);
-
-    // Register a common font that supports Vietnamese
-    // Ensure you have a font file like 'Roboto-Regular.ttf' in your project
-    // doc.font('path/to/your/font/Roboto-Regular.ttf'); // Example
 
     // Header
     doc.fontSize(18).text("HÓA ĐƠN THANH TOÁN", { align: "center" });
@@ -418,7 +423,7 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
       );
       currentY += 15;
     }
-    doc.font("Helvetica-Bold"); // Or your bold Vietnamese font
+    doc.font("Archivo-Bold");
     doc.text(`TỔNG CỘNG:`, financialsStartX, currentY, { align: "left" });
     doc.text(
       `${invoice.financials?.total?.toLocaleString("vi-VN") || "0"} VNĐ`,
@@ -427,7 +432,7 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
       { align: "right" }
     );
     currentY += 15;
-    doc.font("Helvetica"); // Or your regular Vietnamese font
+    doc.font("Archivo");
 
     doc.text(`Đã thanh toán:`, financialsStartX, currentY, { align: "left" });
     doc.text(
@@ -439,7 +444,7 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
     currentY += 15;
 
     if (invoice.financials?.remainingAmount > 0) {
-      doc.font("Helvetica-Bold");
+      doc.font("Archivo-Bold");
       doc.text(`Còn lại:`, financialsStartX, currentY, { align: "left" });
       doc.text(
         `${invoice.financials.remainingAmount.toLocaleString("vi-VN")} VNĐ`,
@@ -447,7 +452,7 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
         currentY,
         { align: "right" }
       );
-      doc.font("Helvetica");
+      doc.font("Archivo");
       currentY += 15;
     }
     currentY += 10;
@@ -547,9 +552,111 @@ const getCustomerInvoices = asyncHandler(async (req, res) => {
   }
 });
 
+// Tạo hóa đơn thủ công (admin hoặc backend gọi)
+const createInvoiceManual = asyncHandler(async (req, res) => {
+  const { transactionId } = req.body;
+  if (!transactionId || !mongoose.Types.ObjectId.isValid(transactionId)) {
+    return res
+      .status(400)
+      .json({ success: false, message: "transactionId không hợp lệ" });
+  }
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    const transaction = await Transaction.findById(transactionId)
+      .populate({
+        path: "bookingId",
+        populate: [
+          { path: "customer" },
+          { path: "yacht", select: "name location" },
+          { path: "schedule", select: "startDate endDate" },
+        ],
+      })
+      .session(session);
+    if (!transaction || !transaction.bookingId) {
+      await session.abortTransaction();
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy transaction hoặc booking liên kết.",
+      });
+    }
+    const booking = transaction.bookingId;
+    const customer = booking.customer;
+    let invoiceItems = [];
+    if (
+      booking.consultationData &&
+      booking.consultationData.requestedRooms &&
+      booking.consultationData.requestedRooms.length > 0
+    ) {
+      invoiceItems = booking.consultationData.requestedRooms.map(
+        (roomData) => ({
+          type: "room",
+          name: roomData.name || "Phòng đặt",
+          description: roomData.description || "",
+          quantity: roomData.quantity,
+          unitPrice: roomData.price / roomData.quantity,
+          totalPrice: roomData.price,
+        })
+      );
+    } else {
+      invoiceItems.push({
+        type: "service",
+        name: `Dịch vụ đặt du thuyền ${booking.bookingCode}`,
+        quantity: 1,
+        unitPrice: booking.amount,
+        totalPrice: booking.amount,
+      });
+    }
+    const newInvoice = new Invoice({
+      bookingId: booking._id,
+      transactionId: transaction._id,
+      customerInfo: {
+        customerId: customer._id,
+        fullName: booking.customerInfo?.fullName || customer.fullName,
+        email: booking.customerInfo?.email || customer.email,
+        phoneNumber: booking.customerInfo?.phoneNumber || customer.phoneNumber,
+        address: booking.customerInfo?.address || customer.address || "",
+      },
+      yachtInfo: {
+        yachtId: booking.yacht?._id,
+        name: booking.yacht?.name,
+        location: booking.yacht?.location,
+        scheduleInfo: booking.schedule
+          ? `${booking.schedule.startDate?.toLocaleDateString()} - ${booking.schedule.endDate?.toLocaleDateString()}`
+          : "",
+        checkInDate: booking.checkInDate,
+      },
+      items: invoiceItems,
+      financials: {
+        subtotal: invoiceItems.reduce((sum, item) => sum + item.totalPrice, 0),
+        totalTax: 0,
+        totalDiscount: 0,
+        total: invoiceItems.reduce((sum, item) => sum + item.totalPrice, 0),
+        paidAmount: transaction.amount,
+        remainingAmount: 0,
+      },
+      issueDate: new Date(),
+    });
+    const savedInvoice = await newInvoice.save({ session });
+    await session.commitTransaction();
+    session.endSession();
+    return res.json({ success: true, data: savedInvoice });
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    console.error("Lỗi tạo hóa đơn thủ công:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi server khi tạo hóa đơn thủ công",
+      error: error.message,
+    });
+  }
+});
+
 module.exports = {
   getInvoiceByTransaction,
   getInvoiceById,
   downloadInvoicePDF,
   getCustomerInvoices,
+  createInvoiceManual,
 };

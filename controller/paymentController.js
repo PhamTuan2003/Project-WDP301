@@ -106,8 +106,14 @@ const createInvoiceForTransaction = async (transactionId, session) => {
       },
       items: invoiceItems,
       financials: {
+        subtotal: invoiceItems.reduce((sum, item) => sum + item.totalPrice, 0),
+        totalTax: 0,
+        totalDiscount: 0,
+        total: invoiceItems.reduce((sum, item) => sum + item.totalPrice, 0),
         paidAmount: transaction.amount,
+        remainingAmount: 0,
       },
+      issueDate: new Date(),
     });
 
     const savedInvoice = await newInvoice.save({ session });
@@ -196,8 +202,6 @@ const processSuccessfulPayment = async (transaction, session) => {
 
   // Tạo Invoice
   const invoice = await createInvoiceForTransaction(transaction._id, session);
-
-  await processSuccessfulPayment(transaction, session);
 
   return { booking, invoice, bookingRoomsCreated };
 };
@@ -695,9 +699,8 @@ const simulatePaymentSuccess = asyncHandler(async (req, res, next) => {
     transaction.gateway_response.message = "Simulated success by admin/test";
     transaction.gateway_response.vnp_TransactionNo = `SIM${Date.now()}`;
     await transaction.save({ session });
-    // Gọi processSuccessfulPayment để cập nhật booking
     await processSuccessfulPayment(transaction, session);
-    // Gọi tạo hóa đơn nếu chưa có
+
     await createInvoiceForTransaction(transaction._id, session);
     await session.commitTransaction();
     session.endSession();
@@ -755,10 +758,6 @@ const getTransactionStatusForCustomer = asyncHandler(async (req, res) => {
       .status(403)
       .json({ success: false, message: "Không có quyền xem giao dịch này." });
   }
-
-  // Không populate quá nhiều ở đây, trả về transaction object thuần
-  // Frontend có thể dựa vào transaction.bookingId để gọi API lấy chi tiết booking nếu cần.
-  // Loại bỏ populate booking nếu không cần thông tin customer
   const publicTransactionData = {
     _id: transaction._id,
     transaction_reference: transaction.transaction_reference,
@@ -771,8 +770,6 @@ const getTransactionStatusForCustomer = asyncHandler(async (req, res) => {
     completedAt: transaction.completedAt,
     expiredAt: transaction.expiredAt,
     failureReason: transaction.failureReason,
-    // Có thể thêm một số thông tin từ gateway_response nếu an toàn để hiển thị
-    // Ví dụ: bank transfer info nếu là bank_transfer và pending
     bankInfo:
       transaction.payment_method === "bank_transfer" &&
       transaction.status === "pending"
@@ -794,5 +791,5 @@ module.exports = {
   handleMomoReturn,
   handleMomoIpn,
   simulatePaymentSuccess,
-  getTransactionStatusForCustomer,
+  getTransactionStatus: getTransactionStatusForCustomer,
 };

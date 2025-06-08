@@ -11,5 +11,10 @@ router.get(
 );
 router.get("/:id/download", veryfiToken, invoiceController.downloadInvoicePDF);
 router.get("/my-invoices", veryfiToken, invoiceController.getCustomerInvoices);
+router.post(
+  "/manual-create",
+  veryfiToken,
+  invoiceController.createInvoiceManual
+);
 
 module.exports = router;
