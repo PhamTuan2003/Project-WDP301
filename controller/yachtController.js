@@ -12,9 +12,6 @@ const YachtType = require('../model/yachtType');
 const Company = require('../model/company');
 const Location = require('../model/location');
 const Service = require('../model/service');
-const YachtService = require('../model/yachtService');
-const Schedule = require('../model/schedule');
-const YachtSchedule = require('../model/yachtSchedule');
 
 
 // Hàm lấy tất cả du thuyền

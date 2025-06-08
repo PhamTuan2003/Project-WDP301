@@ -1,6 +1,7 @@
 const express = require("express");
 const {createYacht, addServiceToYacht, addScheduleToYacht} = require('../controller/yachtController');
 const router = express.Router();
+const {upload} = require('../utils/configClound')
 const {
   getAllYacht,
   getAllServices,

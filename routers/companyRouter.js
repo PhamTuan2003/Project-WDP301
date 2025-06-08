@@ -5,7 +5,6 @@ const {exportBooking, getRevenueBooking, getRevenueService} = require('../contro
 
 
 router.get("/", getAllCompany); //get all company
-const express = require('express');
 router.get('/revenue/service', getRevenueService);
 router.get('/revenue/booking', getRevenueBooking);
 
