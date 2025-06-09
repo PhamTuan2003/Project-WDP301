@@ -97,6 +97,27 @@ const bookingOrderSchema = new mongoose.Schema(
       min: 1,
     },
 
+    adults: {
+      type: Number,
+      required: true,
+      min: 1,
+      default: 1,
+    },
+
+    childrenUnder10: {
+      type: Number,
+      required: true,
+      min: 0,
+      default: 0,
+    },
+
+    childrenAbove10: {
+      type: Number,
+      required: true,
+      min: 0,
+      default: 0,
+    },
+
     checkInDate: {
       type: Date,
       required: true,

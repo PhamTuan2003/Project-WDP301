@@ -230,6 +230,9 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
           : "not_requested",
       requirements: requirements || "",
       guestCount: totalGuestCount,
+      adults: req.body.adults ?? 1,
+      childrenUnder10: req.body.childrenUnder10 ?? 0,
+      childrenAbove10: req.body.childrenAbove10 ?? 0,
       checkInDate: checkIn,
       consultationData: {
         requestedRooms: processedRooms,
@@ -1167,7 +1170,12 @@ exports.getCustomerBookingDetail = asyncHandler(async (req, res) => {
   res.status(200).json({
     success: true,
     data: {
-      booking,
+      booking: {
+        ...booking.toObject(),
+        adults: booking.adults,
+        childrenUnder10: booking.childrenUnder10,
+        childrenAbove10: booking.childrenAbove10,
+      },
       bookedRooms,
       // transactions, // Frontend nên gọi API riêng để lấy transactions.
     },
