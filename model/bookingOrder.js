@@ -8,14 +8,11 @@ const bookingOrderSchema = new mongoose.Schema(
       ref: "Customer",
       required: true,
     },
-
-    // Lưu thông tin customer để tái sử dụng và backup
     customerInfo: {
       fullName: { type: String, required: true },
       email: { type: String, required: true },
       phoneNumber: { type: String, required: true },
       address: String,
-      // Flag để cho phép save info for future bookings
       saveForFuture: { type: Boolean, default: true },
     },
 
