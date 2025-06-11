@@ -230,6 +230,9 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
           : "not_requested",
       requirements: requirements || "",
       guestCount: totalGuestCount,
+      adults: req.body.adults ?? 1,
+      childrenUnder10: req.body.childrenUnder10 ?? 0,
+      childrenAbove10: req.body.childrenAbove10 ?? 0,
       checkInDate: checkIn,
       consultationData: {
         requestedRooms: processedRooms,
@@ -375,6 +378,9 @@ exports.getConsultationRequest = asyncHandler(async (req, res) => {
       address: consultation.customerInfo.address || "",
       checkInDate: consultation.checkInDate,
       guestCount: consultation.guestCount,
+      adults: consultation.adults ?? 1,
+      childrenUnder10: consultation.childrenUnder10 ?? 0,
+      childrenAbove10: consultation.childrenAbove10 ?? 0,
       requirements: consultation.requirements,
       selectedRooms: consultation.consultationData.requestedRooms,
       totalPrice: consultation.consultationData.estimatedPrice,
@@ -839,6 +845,13 @@ exports.rejectBooking = asyncHandler(async (req, res) => {
 });
 // NEW: Controller to UPDATE an existing request
 exports.updateBookingOrConsultationRequest = asyncHandler(async (req, res) => {
+  // LOG giá trị nhận được từ FE
+  console.log("[updateBookingOrConsultationRequest] Nhận từ FE:", {
+    checkInDate: req.body.checkInDate,
+    guestCount: req.body.guestCount,
+    bookingId: req.params.bookingId,
+    fullBody: req.body,
+  });
   const { bookingId } = req.params;
   const {
     yachtId,
@@ -910,8 +923,20 @@ exports.updateBookingOrConsultationRequest = asyncHandler(async (req, res) => {
     bookingOrder.schedule = scheduleId || null;
     bookingOrder.checkInDate = new Date(checkInDate);
     bookingOrder.guestCount = parseInt(guestCount, 10) || 1;
+    // Thêm cập nhật childrenUnder10 và childrenAbove10
+    if (typeof req.body.childrenUnder10 !== "undefined") {
+      bookingOrder.childrenUnder10 = req.body.childrenUnder10;
+    }
+    if (typeof req.body.childrenAbove10 !== "undefined") {
+      bookingOrder.childrenAbove10 = req.body.childrenAbove10;
+    }
     bookingOrder.requirements = requirements || "";
     bookingOrder.amount = totalPrice || 0;
+
+    // Thêm cập nhật adults
+    if (typeof req.body.adults !== "undefined") {
+      bookingOrder.adults = req.body.adults;
+    }
 
     // This is the important part: update status based on user's final action
     bookingOrder.status = requestType;
@@ -940,6 +965,13 @@ exports.updateBookingOrConsultationRequest = asyncHandler(async (req, res) => {
     }
 
     const savedBookingOrder = await bookingOrder.save({ session });
+    // LOG giá trị sau khi lưu vào DB
+    console.log("[updateBookingOrConsultationRequest] Sau khi save vào DB:", {
+      checkInDate: savedBookingOrder.checkInDate,
+      guestCount: savedBookingOrder.guestCount,
+      bookingId: savedBookingOrder._id,
+      status: savedBookingOrder.status,
+    });
     // Nếu chuyển sang pending_payment, tạo lại BookingRoom
     if (requestType === "pending_payment") {
       await BookingRoom.deleteMany(
@@ -973,6 +1005,8 @@ exports.updateBookingOrConsultationRequest = asyncHandler(async (req, res) => {
         bookingId: savedBookingOrder._id.toString(),
         bookingCode: savedBookingOrder.bookingCode,
         status: savedBookingOrder.status,
+        childrenAbove10: savedBookingOrder.childrenAbove10,
+        childrenUnder10: savedBookingOrder.childrenUnder10,
       },
     });
   } catch (error) {
@@ -1167,7 +1201,12 @@ exports.getCustomerBookingDetail = asyncHandler(async (req, res) => {
   res.status(200).json({
     success: true,
     data: {
-      booking,
+      booking: {
+        ...booking.toObject(),
+        adults: booking.adults,
+        childrenUnder10: booking.childrenUnder10,
+        childrenAbove10: booking.childrenAbove10,
+      },
       bookedRooms,
       // transactions, // Frontend nên gọi API riêng để lấy transactions.
     },
