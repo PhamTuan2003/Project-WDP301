@@ -11,6 +11,7 @@ const {
   getTransactionStatus,
   simulatePaymentSuccess,
   cancelTransaction,
+  getPendingTransactionForBooking,
 } = require("../controller/paymentController");
 const { veryfiToken } = require("../middleware/authMiddleware");
 
@@ -25,6 +26,7 @@ console.log("Imported functions:", {
   getTransactionStatus: typeof getTransactionStatus,
   simulatePaymentSuccess: typeof simulatePaymentSuccess,
   cancelTransaction: typeof cancelTransaction,
+  getPendingTransactionForBooking: typeof getPendingTransactionForBooking,
 });
 
 // Only add routes if the handler functions exist
@@ -89,6 +91,14 @@ if (cancelTransaction) {
     "/transaction/:transactionId/cancel",
     veryfiToken,
     cancelTransaction
+  );
+}
+
+if (getPendingTransactionForBooking) {
+  router.get(
+    "/booking/:bookingId/pending-transaction",
+    veryfiToken,
+    getPendingTransactionForBooking
   );
 }
 

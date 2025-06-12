@@ -832,6 +832,27 @@ const cancelTransaction = async (req, res) => {
   }
 };
 
+const getPendingTransactionForBooking = async (req, res) => {
+  const { bookingId } = req.params;
+  try {
+    const transaction = await Transaction.findOne({
+      bookingId,
+      status: "pending",
+    });
+    if (!transaction) {
+      return res
+        .status(404)
+        .json({ success: false, message: "No pending transaction" });
+    }
+    return res.json({
+      success: true,
+      data: { transactionId: transaction._id },
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 module.exports = {
   createDepositPayment,
   createFullPayment,
@@ -842,4 +863,5 @@ module.exports = {
   simulatePaymentSuccess,
   getTransactionStatus: getTransactionStatusForCustomer,
   cancelTransaction: cancelTransaction,
+  getPendingTransactionForBooking,
 };
