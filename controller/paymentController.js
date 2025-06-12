@@ -5,6 +5,8 @@ const BookingRoom = require("../model/bookingRoom");
 const Customer = require("../model/customer"); // For authorization
 const mongoose = require("mongoose");
 const asyncHandler = require("express-async-handler");
+const momoService = require("../services/momoService");
+const vnpayService = require("../services/vnpayService");
 
 const validatePaymentRequest = (req, res, next) => {
   const { bookingId, paymentMethod } = req.body;
@@ -333,6 +335,27 @@ const createPaymentRequestHandler = async (req, res, paymentType) => {
 
       paymentInitiationData.bankInfo = bankInfo;
       paymentInitiationData.expiredAt = transaction.expiredAt;
+    } else if (paymentMethod === "vnpay") {
+      const { paymentUrl } = await vnpayService.createPaymentUrl(
+        transaction,
+        booking,
+        process.env.VNPAY_RETURN_URL,
+        process.env.VNPAY_IPN_URL
+      );
+      paymentInitiationData.paymentUrl = paymentUrl;
+      transaction.gateway_response.vnpay = { paymentUrl };
+      await transaction.save({ session });
+    } else if (paymentMethod === "momo") {
+      const momoResult = await momoService.createPaymentRequest(
+        transaction,
+        booking,
+        process.env.MOMO_RETURN_URL,
+        process.env.MOMO_IPN_URL
+      );
+      paymentInitiationData.qrCodeUrl = momoResult.qrCodeUrl;
+      paymentInitiationData.deeplink = momoResult.deeplink;
+      transaction.gateway_response.momo = momoResult;
+      await transaction.save({ session });
     }
 
     await session.commitTransaction();
@@ -783,6 +806,32 @@ const getTransactionStatusForCustomer = asyncHandler(async (req, res) => {
   });
 });
 
+const cancelTransaction = async (req, res) => {
+  const { transactionId } = req.params;
+  try {
+    const transaction = await Transaction.findById(transactionId);
+    if (!transaction) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Transaction not found" });
+    }
+    if (transaction.status !== "pending") {
+      return res.status(400).json({
+        success: false,
+        message: "Only pending transactions can be cancelled",
+      });
+    }
+    transaction.status = "cancelled";
+    await transaction.save();
+    return res.json({
+      success: true,
+      message: "Transaction cancelled successfully",
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 module.exports = {
   createDepositPayment,
   createFullPayment,
@@ -792,4 +841,5 @@ module.exports = {
   handleMomoIpn,
   simulatePaymentSuccess,
   getTransactionStatus: getTransactionStatusForCustomer,
+  cancelTransaction: cancelTransaction,
 };

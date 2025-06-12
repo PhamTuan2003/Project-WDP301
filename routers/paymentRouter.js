@@ -10,6 +10,7 @@ const {
   handleMomoIpn,
   getTransactionStatus,
   simulatePaymentSuccess,
+  cancelTransaction,
 } = require("../controller/paymentController");
 const { veryfiToken } = require("../middleware/authMiddleware");
 
@@ -23,6 +24,7 @@ console.log("Imported functions:", {
   handleMomoIpn: typeof handleMomoIpn,
   getTransactionStatus: typeof getTransactionStatus,
   simulatePaymentSuccess: typeof simulatePaymentSuccess,
+  cancelTransaction: typeof cancelTransaction,
 });
 
 // Only add routes if the handler functions exist
@@ -80,6 +82,14 @@ if (simulatePaymentSuccess) {
   );
 } else {
   console.error("simulatePaymentSuccess function is undefined");
+}
+
+if (cancelTransaction) {
+  router.post(
+    "/transaction/:transactionId/cancel",
+    veryfiToken,
+    cancelTransaction
+  );
 }
 
 module.exports = router;

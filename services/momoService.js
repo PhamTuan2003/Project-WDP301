@@ -10,14 +10,6 @@ const MOMO_API_ENDPOINT = process.env.MOMO_API_ENDPOINT;
 const MOMO_QUERY_STATUS_API = process.env.MOMO_QUERY_STATUS_API;
 const MOMO_REQUEST_TYPE = process.env.MOMO_REQUEST_TYPE || "captureWallet"; // payWithApp, captureWallet, ...
 
-/**
- * Tạo yêu cầu thanh toán MoMo
- * @param {object} transaction - Transaction object from DB
- * @param {object} booking - BookingOrder object from DB
- * @param {string} clientReturnUrl - URL khách hàng sẽ được redirect về
- * @param {string} serverIpnUrl - URL MoMo sẽ gọi IPN
- * @returns {Promise<object>} { payUrl, qrCodeUrl, deeplink, momoOrderId, momoRequestId }
- */
 async function createPaymentRequest(
   transaction,
   booking,
@@ -80,13 +72,6 @@ async function createPaymentRequest(
   }
 }
 
-/**
- * Xác thực chữ ký từ MoMo IPN hoặc Return URL
- * @param {object} momoPayload - Payload nhận được từ MoMo
- * @param {string} secretKey - Secret key của bạn
- * @param {boolean} isIpn - true nếu là IPN, false nếu là return URL (chữ ký có thể khác nhau)
- * @returns {boolean}
- */
 function verifySignature(momoPayload, secretKey, isIpn = true) {
   const receivedSignature = momoPayload.signature;
   let dataToSign = "";
@@ -160,12 +145,6 @@ function verifySignature(momoPayload, secretKey, isIpn = true) {
   return receivedSignature === calculatedSignature;
 }
 
-/**
- * Query transaction status from MoMo
- * @param {string} orderId - Your order ID
- * @param {string} requestId - Your request ID when creating payment
- * @returns {Promise<object>} MoMo API response
- */
 async function queryTransactionStatus(orderId, requestId) {
   const rawSignature = `accessKey=${MOMO_ACCESS_KEY}&orderId=${orderId}&partnerCode=${MOMO_PARTNER_CODE}&requestId=${requestId}`;
   const signature = crypto
