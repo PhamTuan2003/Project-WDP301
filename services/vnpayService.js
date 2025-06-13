@@ -68,12 +68,6 @@ async function createPaymentUrl(
   return { paymentUrl, vnp_TxnRef_Gateway: orderId }; // vnp_TxnRef_Gateway là mã của bạn
 }
 
-/**
- * Xác thực chữ ký từ VNPay Return URL hoặc IPN
- * @param {object} vnp_Params - Đối tượng chứa các tham số từ VNPay
- * @param {string} secureHashSecret - Secret key của bạn
- * @returns {boolean}
- */
 function verifySignature(vnp_Params, secureHashSecret) {
   const secureHash = vnp_Params["vnp_SecureHash"];
   let paramsToSign = { ...vnp_Params };
@@ -88,13 +82,7 @@ function verifySignature(vnp_Params, secureHashSecret) {
   return secureHash === signed;
 }
 
-/**
- * Gọi API QueryDR của VNPay để kiểm tra trạng thái giao dịch
- * @param {string} orderId - Mã giao dịch của bạn (vnp_TxnRef khi tạo)
- * @param {string} transactionDate - Ngày giao dịch (YYYYMMDDHHmmss, vnp_CreateDate khi tạo)
- * @param {string} ipAddr - IP Address truy vấn
- * @returns {Promise<object>} Phản hồi từ VNPay
- */
+
 async function queryTransactionStatus(
   orderId,
   transactionDate,
