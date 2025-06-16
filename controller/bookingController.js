@@ -24,10 +24,7 @@ const parseGuestCount = (guestCountValue) => {
 
 // ==================== BOOKING ROOM FUNCTIONS ====================
 exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
-  console.log(
-    "Starting createBookingOrConsultationRequest with body:",
-    req.body
-  );
+  console.log("Starting createBookingOrConsultationRequest with body:", req.body);
 
   const {
     yachtId,
@@ -93,15 +90,11 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
     totalPrice,
   });
 
-  if (
-    requestType === "pending_payment" &&
-    (totalPrice === undefined || totalPrice <= 0)
-  ) {
+  if (requestType === "pending_payment" && (totalPrice === undefined || totalPrice <= 0)) {
     console.log("Invalid total price for direct booking");
     return res.status(400).json({
       success: false,
-      message:
-        "Tổng giá là bắt buộc và phải lớn hơn 0 cho yêu cầu đặt trực tiếp.",
+      message: "Tổng giá là bắt buộc và phải lớn hơn 0 cho yêu cầu đặt trực tiếp.",
     });
   }
 
@@ -111,11 +104,7 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
     length: selectedRooms?.length,
   });
 
-  if (
-    !selectedRooms ||
-    !Array.isArray(selectedRooms) ||
-    selectedRooms.length === 0
-  ) {
+  if (!selectedRooms || !Array.isArray(selectedRooms) || selectedRooms.length === 0) {
     console.log("Invalid room selection");
     return res.status(400).json({
       success: false,
@@ -153,9 +142,7 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
 
   try {
     console.log("Finding customer with ID:", req.user.customerId);
-    const customer = await Customer.findById(req.user.customerId).session(
-      session
-    );
+    const customer = await Customer.findById(req.user.customerId).session(session);
     if (!customer) {
       console.log("Customer not found");
       await session.abortTransaction();
@@ -168,13 +155,10 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
     // Update customer info if provided
     console.log("Checking for customer info updates");
     const customerUpdates = {};
-    if (fullName && customer.fullName !== fullName)
-      customerUpdates.fullName = fullName;
-    if (phoneNumber && customer.phoneNumber !== phoneNumber)
-      customerUpdates.phoneNumber = phoneNumber;
+    if (fullName && customer.fullName !== fullName) customerUpdates.fullName = fullName;
+    if (phoneNumber && customer.phoneNumber !== phoneNumber) customerUpdates.phoneNumber = phoneNumber;
     if (email && customer.email !== email) customerUpdates.email = email;
-    if (address && customer.address !== address)
-      customerUpdates.address = address;
+    if (address && customer.address !== address) customerUpdates.address = address;
 
     console.log("Customer updates to apply:", customerUpdates);
 
@@ -224,10 +208,7 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
       schedule: scheduleId || null,
       amount: totalPrice || 0,
       status: requestType,
-      consultationStatus:
-        requestType === "consultation_requested"
-          ? "requested"
-          : "not_requested",
+      consultationStatus: requestType === "consultation_requested" ? "requested" : "not_requested",
       requirements: requirements || "",
       guestCount: totalGuestCount,
       adults: req.body.adults ?? 1,
@@ -237,8 +218,7 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
       consultationData: {
         requestedRooms: processedRooms,
         estimatedPrice: totalPrice || 0,
-        status:
-          requestType === "consultation_requested" ? "pending" : "completed",
+        status: requestType === "consultation_requested" ? "pending" : "completed",
         createdAt: new Date(),
       },
       confirmationCode: uuidv4().replace(/-/g, ""),
@@ -251,10 +231,7 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
 
     if (requestType === "pending_payment") {
       // Xóa các BookingRoom cũ nếu có (phòng tránh trùng khi update)
-      await BookingRoom.deleteMany(
-        { bookingId: savedBookingOrder._id },
-        { session }
-      );
+      await BookingRoom.deleteMany({ bookingId: savedBookingOrder._id }, { session });
       for (const room of processedRooms) {
         await BookingRoom.create(
           [
@@ -272,9 +249,7 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
 
     // Gửi email xác nhận theo loại booking
     try {
-      const checkInDateStr = new Date(
-        savedBookingOrder.checkInDate
-      ).toLocaleDateString("vi-VN");
+      const checkInDateStr = new Date(savedBookingOrder.checkInDate).toLocaleDateString("vi-VN");
       if (requestType === "consultation_requested") {
         const { sendConsultationEmail } = require("../utils/sendMail");
         await sendConsultationEmail(
@@ -327,10 +302,7 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Lỗi server khi xử lý yêu cầu.",
-      error:
-        process.env.NODE_ENV === "development"
-          ? error.message
-          : "Internal server error",
+      error: process.env.NODE_ENV === "development" ? error.message : "Internal server error",
     });
   } finally {
     console.log("Ending database session");
@@ -395,135 +367,121 @@ exports.getConsultationRequest = asyncHandler(async (req, res) => {
  * @route   POST /api/v1/bookings/:bookingId/confirm-consultation
  * @access  Private (Customer)
  */
-exports.customerConfirmBookingAfterConsultation = asyncHandler(
-  async (req, res) => {
-    const { bookingId } = req.params;
+exports.customerConfirmBookingAfterConsultation = asyncHandler(async (req, res) => {
+  const { bookingId } = req.params;
 
-    if (!mongoose.Types.ObjectId.isValid(bookingId)) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Booking ID không hợp lệ." });
-    }
-    if (!req.user.customerId) {
-      return res.status(401).json({
-        success: false,
-        message: "Không tìm thấy thông tin khách hàng từ token.",
-      });
-    }
+  if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+    return res.status(400).json({ success: false, message: "Booking ID không hợp lệ." });
+  }
+  if (!req.user.customerId) {
+    return res.status(401).json({
+      success: false,
+      message: "Không tìm thấy thông tin khách hàng từ token.",
+    });
+  }
 
-    const session = await mongoose.startSession();
-    session.startTransaction();
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
-    try {
-      const booking = await BookingOrder.findById(bookingId).session(session);
+  try {
+    const booking = await BookingOrder.findById(bookingId).session(session);
 
-      if (!booking) {
-        await session.abortTransaction();
-        session.endSession();
-        return res
-          .status(404)
-          .json({ success: false, message: "Booking không tồn tại." });
-      }
-
-      // Authorization: Customer chỉ có thể confirm booking của chính mình
-      if (booking.customer.toString() !== req.user.customerId) {
-        await session.abortTransaction();
-        session.endSession();
-        return res.status(403).json({
-          success: false,
-          message: "Không có quyền xác nhận booking này.",
-        });
-      }
-
-      // Chỉ cho phép xác nhận nếu booking ở trạng thái đã gửi tư vấn
-      if (
-        booking.consultationStatus !== "sent" ||
-        booking.status === "pending_payment" ||
-        booking.status === "confirmed"
-      ) {
-        await session.abortTransaction();
-        session.endSession();
-        return res.status(400).json({
-          success: false,
-          message:
-            "Booking không ở trạng thái cho phép xác nhận hoặc đã được xử lý.",
-        });
-      }
-      // Nhân viên đã phải cập nhật `booking.amount` và `booking.consultationData.requestedRooms` với thông tin cuối cùng.
-
-      booking.status = "pending_payment"; // Chuyển sang chờ thanh toán
-      booking.consultationStatus = "responded"; // KH đã phản hồi
-      // booking.paymentPendingAt = new Date(); // pre-save hook sẽ set
-
-      const savedBooking = await booking.save({ session });
-
-      // Lấy thông tin du thuyền và gửi email xác nhận đặt phòng
-      try {
-        const populatedBooking = await BookingOrder.findById(savedBooking._id)
-          .populate("yacht", "name")
-          .lean();
-        const yachtName = populatedBooking.yacht?.name || "(Không rõ)";
-        const checkInDateStr = new Date(
-          populatedBooking.checkInDate
-        ).toLocaleDateString("vi-VN");
-        // Lấy danh sách phòng đã chọn
-        const rooms = (populatedBooking.consultationData?.requestedRooms || [])
-          .map(
-            (room) =>
-              `<li>${room.name} x ${room.quantity} (${
-                room.area || "?"
-              }m²) - ${room.price?.toLocaleString("vi-VN")} VNĐ</li>`
-          )
-          .join("");
-        const roomListHtml = rooms ? `<ul>${rooms}</ul>` : "Không có";
-        const requirements = populatedBooking.requirements || "Không có";
-        const { sendBookingConfirmationEmail } = require("../utils/sendMail");
-        await sendBookingConfirmationEmail(
-          populatedBooking.customerInfo?.email || "",
-          populatedBooking.customerInfo?.fullName || "",
-          populatedBooking.bookingCode,
-          checkInDateStr,
-          populatedBooking.guestCount,
-          populatedBooking.amount?.toLocaleString("vi-VN"),
-          {
-            yachtName,
-            roomListHtml,
-            requirements,
-          }
-        );
-      } catch (mailErr) {
-        console.error(
-          "Lỗi gửi email xác nhận đặt phòng sau tư vấn:",
-          mailErr.message
-        );
-      }
-
-      await session.commitTransaction();
-      session.endSession();
-
-      res.status(200).json({
-        success: true,
-        message: "Xác nhận booking thành công. Vui lòng tiến hành thanh toán.",
-        data: {
-          bookingId: savedBooking._id.toString(),
-          bookingCode: savedBooking.bookingCode,
-          status: savedBooking.status,
-          amountToPay: savedBooking.amount,
-          paymentBreakdown: savedBooking.paymentBreakdown,
-        },
-      });
-    } catch (error) {
+    if (!booking) {
       await session.abortTransaction();
       session.endSession();
-      console.error("Lỗi customer confirm booking after consultation:", error);
-      res.status(500).json({
+      return res.status(404).json({ success: false, message: "Booking không tồn tại." });
+    }
+
+    // Authorization: Customer chỉ có thể confirm booking của chính mình
+    if (booking.customer.toString() !== req.user.customerId) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(403).json({
         success: false,
-        message: "Lỗi server khi xác nhận booking.",
-        error: error.message,
+        message: "Không có quyền xác nhận booking này.",
       });
     }
+
+    // Chỉ cho phép xác nhận nếu booking ở trạng thái đã gửi tư vấn
+    if (
+      booking.consultationStatus !== "sent" ||
+      booking.status === "pending_payment" ||
+      booking.status === "confirmed"
+    ) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({
+        success: false,
+        message: "Booking không ở trạng thái cho phép xác nhận hoặc đã được xử lý.",
+      });
+    }
+    // Nhân viên đã phải cập nhật `booking.amount` và `booking.consultationData.requestedRooms` với thông tin cuối cùng.
+
+    booking.status = "pending_payment"; // Chuyển sang chờ thanh toán
+    booking.consultationStatus = "responded"; // KH đã phản hồi
+    // booking.paymentPendingAt = new Date(); // pre-save hook sẽ set
+
+    const savedBooking = await booking.save({ session });
+
+    // Lấy thông tin du thuyền và gửi email xác nhận đặt phòng
+    try {
+      const populatedBooking = await BookingOrder.findById(savedBooking._id).populate("yacht", "name").lean();
+      const yachtName = populatedBooking.yacht?.name || "(Không rõ)";
+      const checkInDateStr = new Date(populatedBooking.checkInDate).toLocaleDateString("vi-VN");
+      // Lấy danh sách phòng đã chọn
+      const rooms = (populatedBooking.consultationData?.requestedRooms || [])
+        .map(
+          (room) =>
+            `<li>${room.name} x ${room.quantity} (${room.area || "?"}m²) - ${room.price?.toLocaleString(
+              "vi-VN"
+            )} VNĐ</li>`
+        )
+        .join("");
+      const roomListHtml = rooms ? `<ul>${rooms}</ul>` : "Không có";
+      const requirements = populatedBooking.requirements || "Không có";
+      const { sendBookingConfirmationEmail } = require("../utils/sendMail");
+      await sendBookingConfirmationEmail(
+        populatedBooking.customerInfo?.email || "",
+        populatedBooking.customerInfo?.fullName || "",
+        populatedBooking.bookingCode,
+        checkInDateStr,
+        populatedBooking.guestCount,
+        populatedBooking.amount?.toLocaleString("vi-VN"),
+        {
+          yachtName,
+          roomListHtml,
+          requirements,
+        }
+      );
+    } catch (mailErr) {
+      console.error("Lỗi gửi email xác nhận đặt phòng sau tư vấn:", mailErr.message);
+    }
+
+    await session.commitTransaction();
+    session.endSession();
+
+    res.status(200).json({
+      success: true,
+      message: "Xác nhận booking thành công. Vui lòng tiến hành thanh toán.",
+      data: {
+        bookingId: savedBooking._id.toString(),
+        bookingCode: savedBooking.bookingCode,
+        status: savedBooking.status,
+        amountToPay: savedBooking.amount,
+        paymentBreakdown: savedBooking.paymentBreakdown,
+      },
+    });
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    console.error("Lỗi customer confirm booking after consultation:", error);
+    res.status(500).json({
+      success: false,
+      message: "Lỗi server khi xác nhận booking.",
+      error: error.message,
+    });
   }
-);
+});
 // ==================== BOOKING STATUS MANAGEMENT ====================
 
 exports.updateBookingStatus = asyncHandler(async (req, res) => {
@@ -569,10 +527,7 @@ exports.updateBookingStatus = asyncHandler(async (req, res) => {
       const customer = await Customer.findOne({
         accountId: req.user._id,
       }).session(session);
-      if (
-        !customer ||
-        booking.customer.toString() !== customer._id.toString()
-      ) {
+      if (!customer || booking.customer.toString() !== customer._id.toString()) {
         await session.abortTransaction();
         session.endSession();
         return res.status(403).json({
@@ -599,17 +554,15 @@ exports.updateBookingStatus = asyncHandler(async (req, res) => {
         booking.consultationData.requestedRooms &&
         booking.consultationData.requestedRooms.length > 0
       ) {
-        const bookingRoomPromises = booking.consultationData.requestedRooms.map(
-          (roomData) => {
-            const newBookingRoom = new BookingRoom({
-              bookingId: booking._id,
-              roomId: roomData.id, // This is the ObjectId of the actual Room
-              quantity: roomData.quantity,
-              price: roomData.price, // This is the total price for this room selection (price for quantity)
-            });
-            return newBookingRoom.save({ session });
-          }
-        );
+        const bookingRoomPromises = booking.consultationData.requestedRooms.map((roomData) => {
+          const newBookingRoom = new BookingRoom({
+            bookingId: booking._id,
+            roomId: roomData.id, // This is the ObjectId of the actual Room
+            quantity: roomData.quantity,
+            price: roomData.price, // This is the total price for this room selection (price for quantity)
+          });
+          return newBookingRoom.save({ session });
+        });
         await Promise.all(bookingRoomPromises);
         console.log(`BookingRooms created for BookingOrder ${booking._id}`);
       }
@@ -646,12 +599,7 @@ exports.confirmBooking = asyncHandler(async (req, res) => {
   const { id } = req.params; // BookingOrder ID
   const { scheduleId } = req.body;
 
-  console.log(
-    "Received confirm request for BookingOrder ID:",
-    id,
-    "with scheduleId:",
-    scheduleId
-  );
+  console.log("Received confirm request for BookingOrder ID:", id, "with scheduleId:", scheduleId);
 
   if (!id) {
     return res.status(400).json({
@@ -674,11 +622,7 @@ exports.confirmBooking = asyncHandler(async (req, res) => {
       });
     }
 
-    console.log(
-      "Current booking state before confirmation:",
-      booking.status,
-      booking.consultationData
-    );
+    console.log("Current booking state before confirmation:", booking.status, booking.consultationData);
 
     if (booking.status === "confirmed") {
       await session.abortTransaction(); // No need to re-confirm
@@ -690,9 +634,7 @@ exports.confirmBooking = asyncHandler(async (req, res) => {
     }
 
     // Typically, confirmation moves from 'consultation_requested' or 'consultation_sent'
-    if (
-      !["consultation_requested", "consultation_sent"].includes(booking.status)
-    ) {
+    if (!["consultation_requested", "consultation_sent"].includes(booking.status)) {
       await session.abortTransaction();
       session.endSession();
       return res.status(400).json({
@@ -717,21 +659,17 @@ exports.confirmBooking = asyncHandler(async (req, res) => {
       booking.consultationData.requestedRooms &&
       booking.consultationData.requestedRooms.length > 0
     ) {
-      const bookingRoomPromises = booking.consultationData.requestedRooms.map(
-        (roomData) => {
-          const newBookingRoom = new BookingRoom({
-            bookingId: booking._id,
-            roomId: roomData.id, // This is the ObjectId of the actual Room
-            quantity: roomData.quantity,
-            price: roomData.price, // This is the total price for this roomData (price for quantity)
-          });
-          return newBookingRoom.save({ session });
-        }
-      );
+      const bookingRoomPromises = booking.consultationData.requestedRooms.map((roomData) => {
+        const newBookingRoom = new BookingRoom({
+          bookingId: booking._id,
+          roomId: roomData.id, // This is the ObjectId of the actual Room
+          quantity: roomData.quantity,
+          price: roomData.price, // This is the total price for this roomData (price for quantity)
+        });
+        return newBookingRoom.save({ session });
+      });
       await Promise.all(bookingRoomPromises);
-      console.log(
-        `BookingRooms created for BookingOrder ${booking._id} upon confirmation.`
-      );
+      console.log(`BookingRooms created for BookingOrder ${booking._id} upon confirmation.`);
     } else if (existingBookingRooms.length === 0) {
       console.warn(
         `BookingOrder ${booking._id} confirmed, but no requestedRooms found in consultationData or BookingRooms already exist.`
@@ -869,24 +807,18 @@ exports.updateBookingOrConsultationRequest = asyncHandler(async (req, res) => {
   } = req.body;
 
   if (!mongoose.Types.ObjectId.isValid(bookingId)) {
-    return res
-      .status(400)
-      .json({ success: false, message: "Booking ID không hợp lệ." });
+    return res.status(400).json({ success: false, message: "Booking ID không hợp lệ." });
   }
 
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    const bookingOrder = await BookingOrder.findById(bookingId).session(
-      session
-    );
+    const bookingOrder = await BookingOrder.findById(bookingId).session(session);
 
     if (!bookingOrder) {
       await session.abortTransaction();
-      return res
-        .status(404)
-        .json({ success: false, message: "Không tìm thấy yêu cầu booking." });
+      return res.status(404).json({ success: false, message: "Không tìm thấy yêu cầu booking." });
     }
 
     // Authorization: Ensure the user owns this booking
@@ -913,10 +845,8 @@ exports.updateBookingOrConsultationRequest = asyncHandler(async (req, res) => {
       customerUpdates["customerInfo.fullName"] = fullName;
     if (phoneNumber && bookingOrder.customerInfo.phoneNumber !== phoneNumber)
       customerUpdates["customerInfo.phoneNumber"] = phoneNumber;
-    if (email && bookingOrder.customerInfo.email !== email)
-      customerUpdates["customerInfo.email"] = email;
-    if (address && bookingOrder.customerInfo.address !== address)
-      customerUpdates["customerInfo.address"] = address;
+    if (email && bookingOrder.customerInfo.email !== email) customerUpdates["customerInfo.email"] = email;
+    if (address && bookingOrder.customerInfo.address !== address) customerUpdates["customerInfo.address"] = address;
 
     // Update booking details
     bookingOrder.yacht = yachtId;
@@ -942,20 +872,18 @@ exports.updateBookingOrConsultationRequest = asyncHandler(async (req, res) => {
     bookingOrder.status = requestType;
 
     // Update consultation data with the new selection
-    bookingOrder.consultationData.requestedRooms = selectedRooms.map(
-      (room) => ({
-        id: room.id,
-        name: room.name,
-        quantity: room.quantity,
-        price: room.price,
-        description: room.description,
-        area: room.area,
-        avatar: room.avatar,
-        max_people: room.max_people,
-        beds: room.beds,
-        image: room.image,
-      })
-    );
+    bookingOrder.consultationData.requestedRooms = selectedRooms.map((room) => ({
+      id: room.id,
+      name: room.name,
+      quantity: room.quantity,
+      price: room.price,
+      description: room.description,
+      area: room.area,
+      avatar: room.avatar,
+      max_people: room.max_people,
+      beds: room.beds,
+      image: room.image,
+    }));
     bookingOrder.consultationData.estimatedPrice = totalPrice || 0;
     bookingOrder.consultationData.updatedAt = new Date();
 
@@ -974,10 +902,7 @@ exports.updateBookingOrConsultationRequest = asyncHandler(async (req, res) => {
     });
     // Nếu chuyển sang pending_payment, tạo lại BookingRoom
     if (requestType === "pending_payment") {
-      await BookingRoom.deleteMany(
-        { bookingId: savedBookingOrder._id },
-        { session }
-      );
+      await BookingRoom.deleteMany({ bookingId: savedBookingOrder._id }, { session });
       for (const room of selectedRooms) {
         await BookingRoom.create(
           [
@@ -1027,9 +952,7 @@ exports.cancelConsultationRequest = asyncHandler(async (req, res) => {
   const { bookingId } = req.params;
 
   if (!mongoose.Types.ObjectId.isValid(bookingId)) {
-    return res
-      .status(400)
-      .json({ success: false, message: "Booking ID không hợp lệ." });
+    return res.status(400).json({ success: false, message: "Booking ID không hợp lệ." });
   }
 
   const bookingOrder = await BookingOrder.findOne({
@@ -1084,10 +1007,7 @@ exports.getBookingWithTransactions = asyncHandler(async (req, res) => {
       canAccess = true;
     } else {
       const customer = await Customer.findOne({ accountId: req.user._id });
-      if (
-        customer &&
-        booking.customer._id.toString() === customer._id.toString()
-      ) {
+      if (customer && booking.customer._id.toString() === customer._id.toString()) {
         canAccess = true;
       }
     }
@@ -1167,9 +1087,7 @@ exports.getCustomerBookingDetail = asyncHandler(async (req, res) => {
   }
   const { bookingId } = req.params;
   if (!mongoose.Types.ObjectId.isValid(req.params.bookingId)) {
-    return res
-      .status(400)
-      .json({ success: false, message: "Booking ID không hợp lệ." });
+    return res.status(400).json({ success: false, message: "Booking ID không hợp lệ." });
   }
 
   const booking = await BookingOrder.findById(bookingId)
@@ -1178,9 +1096,7 @@ exports.getCustomerBookingDetail = asyncHandler(async (req, res) => {
     .populate({ path: "customer", select: "fullName email phoneNumber" });
 
   if (!booking) {
-    return res
-      .status(404)
-      .json({ success: false, message: "Booking không tồn tại." });
+    return res.status(404).json({ success: false, message: "Booking không tồn tại." });
   }
 
   // Authorization: Customer chỉ xem được booking của mình
@@ -1283,9 +1199,7 @@ exports.customerCancelBooking = asyncHandler(async (req, res) => {
   const { bookingId } = req.params;
 
   if (!mongoose.Types.ObjectId.isValid(bookingId)) {
-    return res
-      .status(400)
-      .json({ success: false, message: "Booking ID không hợp lệ." });
+    return res.status(400).json({ success: false, message: "Booking ID không hợp lệ." });
   }
   if (!req.user.customerId) {
     return res.status(401).json({
@@ -1303,18 +1217,14 @@ exports.customerCancelBooking = asyncHandler(async (req, res) => {
     if (!booking) {
       await session.abortTransaction();
       session.endSession();
-      return res
-        .status(404)
-        .json({ success: false, message: "Booking không tồn tại." });
+      return res.status(404).json({ success: false, message: "Booking không tồn tại." });
     }
 
     // Authorization: Customer chỉ hủy được booking của mình
     if (booking.customer.toString() !== req.user.customerId) {
       await session.abortTransaction();
       session.endSession();
-      return res
-        .status(403)
-        .json({ success: false, message: "Không có quyền hủy booking này." });
+      return res.status(403).json({ success: false, message: "Không có quyền hủy booking này." });
     }
 
     // Logic kiểm tra điều kiện hủy (ví dụ: trước ngày check-in bao lâu, trạng thái hiện tại)

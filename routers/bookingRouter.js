@@ -16,29 +16,14 @@ const {
   cancelConsultationRequest,
 } = bookingController;
 const { veryfiToken } = require("../middleware/authMiddleware"); // Assuming you have this
-const {
-  sendBookingConfirmationEmail,
-  testSendMail,
-} = require("../utils/sendMail");
+const { sendBookingConfirmationEmail, testSendMail } = require("../utils/sendMail");
 
 // ==================== BOOKING CREATION & CONSULTATION ====================
 router.post("/request", veryfiToken, createBookingOrConsultationRequest);
-router.put(
-  "/request/:bookingId",
-  veryfiToken,
-  updateBookingOrConsultationRequest
-);
-router.post(
-  "/:bookingId/confirm-consultation",
-  veryfiToken,
-  customerConfirmBookingAfterConsultation
-);
+router.put("/request/:bookingId", veryfiToken, updateBookingOrConsultationRequest);
+router.post("/:bookingId/confirm-consultation", veryfiToken, customerConfirmBookingAfterConsultation);
 router.get("/consultation", veryfiToken, getConsultationRequest);
-router.delete(
-  "/consultation/:bookingId",
-  veryfiToken,
-  cancelConsultationRequest
-);
+router.delete("/consultation/:bookingId", veryfiToken, cancelConsultationRequest);
 router.get("/my-bookings", veryfiToken, getCustomerBookings);
 // Lấy chi tiết một booking của khách hàng đang đăng nhập
 router.get("/:bookingId/my-detail", veryfiToken, getCustomerBookingDetail);
