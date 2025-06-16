@@ -247,9 +247,10 @@ const googleLogin = async (req, res) => {
 //   }
 // };
 
+// Hàm cập nhật thông tin khách hàng
 const updateCustomer = async (req, res) => {
   const { id } = req.params;
-  const { fullName, phoneNumber } = req.body;
+  const { fullName, email, phoneNumber } = req.body;
 
   try {
     const customer = await Customer.findById(id);
@@ -257,17 +258,25 @@ const updateCustomer = async (req, res) => {
       return res.status(404).json({ message: "Không tìm thấy khách hàng" });
     }
 
+    // Kiểm tra nếu tài khoản là Google (có googleId) thì không cho sửa email
+    if (customer.googleId && email) {
+      return res.status(400).json({ message: "Không thể sửa email cho tài khoản Google" });
+    }
+
     if (fullName) customer.fullName = fullName;
+    if (email && !customer.googleId) {
+      // Chỉ cập nhật email nếu không phải tài khoản Google
+      customer.email = email;
+    }
     if (phoneNumber) {
-      if (!/^\d{10,11}$/.test(phoneNumber)) {
-        return res.status(400).json({ message: "Số điện thoại không hợp lệ (phải có 10-11 chữ số)" });
+      if (!/^(?:\+84|0)(3[2-9]|5[6-9]|7[0-9]|8[1-9]|9[0-9])[0-9]{7}$/.test(phoneNumber)) {
+        return res.status(400).json({ message: "Số điện thoại không hợp lệ (phải bắt đầu bằng 0 hoặc +84, theo sau là đầu số hợp lệ và 7 chữ số)" });
       }
       customer.phoneNumber = phoneNumber;
     }
 
     await customer.save();
 
-    // Nếu avatar tồn tại, thêm BASE_URL vào trước đường dẫn (trừ khi avatar là URL từ Google)
     const avatar = customer.avatar
       ? customer.avatar.startsWith("http")
         ? customer.avatar
@@ -290,6 +299,7 @@ const updateCustomer = async (req, res) => {
   }
 };
 
+// Hàm upload avatar cho khách hàng
 const uploadCustomerAvatar = async (req, res) => {
   const { id } = req.params;
 
