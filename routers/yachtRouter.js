@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const {upload} = require('../utils/configClound')
 const {
   getAllYacht,
   getAllServices,
@@ -8,6 +9,9 @@ const {
   getSchedulesByYacht,
   getYachtById,
   getServicesByYachtId,
+  createYacht,
+  addServiceToYacht,
+  addScheduleToYacht,
 } = require("../controller/yachtController");
 
 router.get("/", getAllYacht);
@@ -18,5 +22,8 @@ router.get("/findboat/:id", getYachtById);
 router.get("/:id/feedbacks", getFeedbacksByYacht);
 router.get("/:id/services", getServicesByYachtId);
 router.get("/:id/schedules", getSchedulesByYacht);
+router.post('/create', upload.single('image'), createYacht);
+router.post('/add-service', addServiceToYacht);
+router.post('/add-schedule', addScheduleToYacht);
 
 module.exports = router;

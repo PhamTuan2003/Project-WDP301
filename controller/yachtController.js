@@ -5,7 +5,12 @@ const {
   RoomType,
   Feedback,
   Schedule,
+  Location,
+  YachtType,
+  Company,
+  Service,
 } = require("../model");
+const yachtSchema = require("../model/yachtSchema");
 const cloudinary = require("../utils/configClound");
 
 // Hàm lấy tất cả du thuyền
@@ -93,15 +98,7 @@ const getServicesByYachtId = async (req, res) => {
 // Hàm tìm kiếm du thuyền
 const searchYachts = async (req, res) => {
   try {
-    const {
-      name,
-      location,
-      greater_defaultPrice,
-      lower_defaultPrice,
-      stars,
-      durations,
-      features,
-    } = req.query;
+    const { name, location, greater_defaultPrice, lower_defaultPrice, stars, durations, features } = req.query;
     let query = {};
 
     if (name) query.name = { $regex: name, $options: "i" };
@@ -120,10 +117,7 @@ const searchYachts = async (req, res) => {
           const feedbacks = await Feedback.find({ yachtId: yacht._id });
           const avgRating =
             feedbacks.length > 0
-              ? Math.round(
-                  feedbacks.reduce((sum, fb) => sum + fb.starRating, 0) /
-                    feedbacks.length
-                )
+              ? Math.round(feedbacks.reduce((sum, fb) => sum + fb.starRating, 0) / feedbacks.length)
               : 0;
           return starArray.includes(avgRating) ? yacht : null;
         })
@@ -142,14 +136,10 @@ const searchYachts = async (req, res) => {
           const yachtDurations = schedules.map((schedule) => {
             const startDate = new Date(schedule.scheduleId.startDate);
             const endDate = new Date(schedule.scheduleId.endDate);
-            const durationDays = Math.ceil(
-              (endDate - startDate) / (1000 * 60 * 60 * 24)
-            );
+            const durationDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
             return `${durationDays} ngày ${durationDays - 1} đêm`;
           });
-          return durationArray.some((d) => yachtDurations.includes(d))
-            ? yacht
-            : null;
+          return durationArray.some((d) => yachtDurations.includes(d)) ? yacht : null;
         })
       );
       yachts = yachts.filter(Boolean);
@@ -163,12 +153,8 @@ const searchYachts = async (req, res) => {
           const services = await YachtService.find({
             yachtId: yacht._id,
           }).populate("serviceId");
-          const yachtFeatures = services
-            .map((service) => service.serviceId?.serviceName)
-            .filter(Boolean);
-          return featureArray.every((f) => yachtFeatures.includes(f))
-            ? yacht
-            : null;
+          const yachtFeatures = services.map((service) => service.serviceId?.serviceName).filter(Boolean);
+          return featureArray.every((f) => yachtFeatures.includes(f)) ? yacht : null;
         })
       );
       yachts = yachts.filter(Boolean);
@@ -177,13 +163,8 @@ const searchYachts = async (req, res) => {
     // Tính cheapestPrice
     yachts = await Promise.all(
       yachts.map(async (yacht) => {
-        const roomTypes = await RoomType.find({ yachtId: yacht._id }).select(
-          "price"
-        );
-        const cheapestPrice =
-          roomTypes.length > 0
-            ? Math.min(...roomTypes.map((rt) => rt.price))
-            : null;
+        const roomTypes = await RoomType.find({ yachtId: yacht._id }).select("price");
+        const cheapestPrice = roomTypes.length > 0 ? Math.min(...roomTypes.map((rt) => rt.price)) : null;
         return { ...yacht.toObject(), cheapestPrice };
       })
     );
@@ -192,10 +173,8 @@ const searchYachts = async (req, res) => {
     if (greater_defaultPrice || lower_defaultPrice) {
       yachts = yachts.filter((yacht) => {
         const price = yacht.cheapestPrice;
-        if (greater_defaultPrice && price < Number(greater_defaultPrice))
-          return false;
-        if (lower_defaultPrice && price > Number(lower_defaultPrice))
-          return false;
+        if (greater_defaultPrice && price < Number(greater_defaultPrice)) return false;
+        if (lower_defaultPrice && price > Number(lower_defaultPrice)) return false;
         return true;
       });
     }
@@ -237,6 +216,7 @@ const getSchedulesByYacht = async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 };
+
 // Hàm lấy thông tin du thuyền theo id
 const getYachtById = async (req, res) => {
   try {
@@ -266,6 +246,138 @@ const getYachtById = async (req, res) => {
   }
 };
 
+// Hàm tạo du thuyền mới
+const createYacht = async (req, res) => {
+  try {
+    const { name, launch, description, hullBody, rule, itinerary, location_id, yachtType_id, id_companys } = req.body;
+
+    // req.file.path là secure_url từ Cloudinary
+    if (!req.file || !req.file.path) {
+      return res.status(400).json({ message: "Image upload failed or not provided" });
+    }
+
+    const yacht = new YachtSchema({
+      name,
+      image: req.file.path,
+      launch,
+      description,
+      hullBody,
+      rule,
+      itinerary,
+      location_id,
+      yachtType_id,
+      id_companys,
+    });
+
+    await yacht.save();
+    res.status(201).json(yacht);
+  } catch (error) {
+    console.error("Error creating yacht:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+//Hàm cập nhật thông tin du thuyền
+const updateYacht = async (req, res) => {
+  try {
+    const yachtId = req.params.id;
+
+    const { name, launch, description, hullBody, rule, itinerary, location_id, yachtType_id, id_companys } = req.body;
+
+    const updateData = {
+      name,
+      launch,
+      description,
+      hullBody,
+      rule,
+      itinerary,
+      location_id,
+      yachtType_id,
+      id_companys,
+      updatedAt: Date.now(),
+    };
+
+    // Nếu người dùng upload ảnh mới
+    if (req.file && req.file.path) {
+      updateData.image = req.file.path;
+    }
+
+    const updatedYacht = await YachtSchema.findByIdAndUpdate(yachtId, updateData, { new: true, runValidators: true });
+
+    if (!updatedYacht) {
+      return res.status(404).json({ message: "Yacht not found" });
+    }
+
+    res.status(200).json({
+      message: "Yacht updated successfully",
+      yacht: updatedYacht,
+    });
+  } catch (error) {
+    console.error("Error updating yacht:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+// Hàm thêm dịch vụ vào du thuyền
+const addServiceToYacht = async (req, res) => {
+  try {
+    const { serviceName, price, yachtId } = req.body;
+
+    if (!serviceName || price == null || !yachtId) {
+      return res.status(400).json({ message: "serviceName, price, and yachtId are required" });
+    }
+
+    // 1. Tạo dịch vụ mới
+    const newService = new Service({ serviceName, price });
+    const savedService = await newService.save();
+
+    // 2. Gắn dịch vụ vào thuyền
+    const yachtService = new YachtService({
+      yachtId,
+      serviceId: savedService._id,
+    });
+    await yachtService.save();
+
+    return res.status(201).json({
+      message: "Service created and added to yacht successfully",
+      service: savedService,
+    });
+  } catch (error) {
+    console.error("Error adding service to yacht:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+// Hàm thêm lịch trình vào du thuyền
+const addScheduleToYacht = async (req, res) => {
+  try {
+    const { startDate, endDate, yachtId } = req.body;
+
+    if (!startDate || !endDate || !yachtId) {
+      return res.status(400).json({ message: "startDate, endDate, and yachtId are required" });
+    }
+
+    // 1. Tạo schedule mới
+    const newSchedule = new Schedule({ startDate, endDate });
+    const savedSchedule = await newSchedule.save();
+
+    // 2. Gắn schedule vào yacht
+    const yachtSchedule = new YachtSchedule({
+      yachtId,
+      scheduleId: savedSchedule._id,
+    });
+    await yachtSchedule.save();
+
+    return res.status(201).json({
+      message: "Schedule created and assigned to yacht successfully",
+      schedule: savedSchedule,
+    });
+  } catch (error) {
+    console.error("Error adding schedule to yacht:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
 module.exports = {
   getAllYacht,
   getAllServices,
@@ -274,4 +386,8 @@ module.exports = {
   getSchedulesByYacht,
   getYachtById,
   getServicesByYachtId,
+  createYacht,
+  addServiceToYacht,
+  addScheduleToYacht,
+  updateYacht,
 };
