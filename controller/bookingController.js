@@ -205,6 +205,7 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
       checkInDate: checkIn,
       consultationData: {
         requestedRooms: processedRooms,
+        requestServices: selectedServices,
         estimatedPrice: totalPrice || 0,
         status:
           requestType === "consultation_requested" ? "pending" : "completed",
@@ -217,19 +218,6 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
     const newBookingOrder = new BookingOrder(newBookingOrderData);
     const savedBookingOrder = await newBookingOrder.save({ session });
     console.log("Booking order saved successfully:", savedBookingOrder._id);
-
-    // Lưu các dịch vụ đã chọn vào bảng bookingService
-    if (Array.isArray(selectedServices) && selectedServices.length > 0) {
-      for (const service of selectedServices) {
-        await BookingService.create(
-          {
-            bookingId: savedBookingOrder._id,
-            serviceId: service.id || service._id || service,
-          },
-          { session }
-        );
-      }
-    }
 
     // Gửi email xác nhận theo loại booking
     try {
@@ -705,11 +693,15 @@ exports.confirmBooking = asyncHandler(async (req, res) => {
     }
 
     // Lưu các dịch vụ đi kèm khi xác nhận booking
-    if (Array.isArray(selectedServices) && selectedServices.length > 0) {
+    const requestServices = booking.consultationData?.requestServices || [];
+    if (Array.isArray(requestServices) && requestServices.length > 0) {
       await BookingService.deleteMany({ bookingId: booking._id }, { session }); // Xóa cũ nếu có
-      const bookingServiceDocs = selectedServices.map((serviceId) => ({
+      const bookingServiceDocs = requestServices.map((service) => ({
         bookingId: booking._id,
-        serviceId,
+        serviceId: service.id || service._id || service,
+        price: service.price,
+        quantity: service.quantity,
+        name: service.name,
       }));
       await BookingService.insertMany(bookingServiceDocs, { session });
       console.log(
@@ -974,22 +966,25 @@ exports.updateBookingOrConsultationRequest = asyncHandler(async (req, res) => {
     }
 
     // Xử lý cập nhật dịch vụ đi kèm
-    if (Array.isArray(req.body.selectedServices)) {
-      // Xóa các dịch vụ cũ
+    const requestServices =
+      savedBookingOrder.consultationData?.requestServices || [];
+    if (Array.isArray(requestServices) && requestServices.length > 0) {
       await BookingService.deleteMany(
         { bookingId: savedBookingOrder._id },
         { session }
+      ); // Xóa cũ nếu có
+      const bookingServiceDocs = requestServices.map((service) => ({
+        bookingId: savedBookingOrder._id,
+        serviceId: service.id || service._id || service,
+        price: service.price,
+        quantity: service.quantity,
+        name: service.name,
+      }));
+      await BookingService.insertMany(bookingServiceDocs, { session });
+      console.log(
+        "Đã lưu các dịch vụ đi kèm cho booking khi xác nhận:",
+        bookingServiceDocs
       );
-      // Thêm các dịch vụ mới
-      for (const service of req.body.selectedServices) {
-        await BookingService.create(
-          {
-            bookingId: savedBookingOrder._id,
-            serviceId: service.id || service._id || service,
-          },
-          { session }
-        );
-      }
     }
 
     await session.commitTransaction();

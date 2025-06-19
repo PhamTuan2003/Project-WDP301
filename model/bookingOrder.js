@@ -143,6 +143,14 @@ const bookingOrderSchema = new mongoose.Schema(
           image: String,
         },
       ],
+      requestServices: [
+        {
+          id: { type: String, required: true },
+          name: String,
+          price: Number,
+          quantity: Number,
+        },
+      ],
       estimatedPrice: {
         type: Number,
         min: 0,
@@ -158,7 +166,7 @@ const bookingOrderSchema = new mongoose.Schema(
       },
       notes: String,
       respondedAt: Date,
-      // Thêm thông tin staff xử lý
+
       assignedStaff: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Staff",
