@@ -296,4 +296,8 @@ bookingOrderSchema.virtual("formattedAmount").get(function () {
   return this.amount?.toLocaleString("vi-VN") + " VNĐ";
 });
 
-module.exports = mongoose.model("BookingOrder", bookingOrderSchema);
+module.exports = mongoose.model(
+  "BookingOrder",
+  bookingOrderSchema,
+  "bookingOrders"
+);

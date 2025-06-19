@@ -7,7 +7,10 @@ const Yacht = require("../model/yachtSchema");
 const asyncHandler = require("express-async-handler");
 const mongoose = require("mongoose");
 const { v4: uuidv4 } = require("uuid");
+const BookingService = require("../model/bookingService");
+const { sendConsultationEmail } = require("../utils/sendMail");
 const { sendBookingConfirmationEmail } = require("../utils/sendMail");
+const Service = require("../model/service");
 
 const parseGuestCount = (guestCountValue) => {
   if (typeof guestCountValue === "number") {
@@ -24,14 +27,8 @@ const parseGuestCount = (guestCountValue) => {
 
 // ==================== BOOKING ROOM FUNCTIONS ====================
 exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
-  console.log(
-    "Starting createBookingOrConsultationRequest with body:",
-    req.body
-  );
-
   const {
     yachtId,
-    bookingId,
     scheduleId,
     checkInDate,
     guestCount,
@@ -43,16 +40,8 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
     email,
     address,
     requestType = "consultation_requested",
+    selectedServices = [],
   } = req.body;
-
-  console.log("Parsed request parameters:", {
-    yachtId,
-    scheduleId,
-    checkInDate,
-    guestCount,
-    totalPrice,
-    requestType,
-  });
 
   const requiredFields = {
     yachtId,
@@ -66,10 +55,7 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
     .filter(([key, value]) => !value)
     .map(([key]) => key);
 
-  console.log("Validation check - Missing fields:", missingFields);
-
   if (missingFields.length > 0) {
-    console.log("Validation failed - Missing required fields");
     return res.status(400).json({
       success: false,
       message: `Thiếu thông tin bắt buộc: ${missingFields.join(", ")}`,
@@ -78,26 +64,18 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
   }
 
   const validRequestTypes = ["pending_payment", "consultation_requested"];
-  console.log("Validating request type:", requestType);
 
   if (!validRequestTypes.includes(requestType)) {
-    console.log("Invalid request type:", requestType);
     return res.status(400).json({
       success: false,
       message: "Loại yêu cầu không hợp lệ.",
     });
   }
 
-  console.log("Checking total price for direct booking:", {
-    requestType,
-    totalPrice,
-  });
-
   if (
     requestType === "pending_payment" &&
     (totalPrice === undefined || totalPrice <= 0)
   ) {
-    console.log("Invalid total price for direct booking");
     return res.status(400).json({
       success: false,
       message:
@@ -105,18 +83,11 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
     });
   }
 
-  console.log("Validating selected rooms:", {
-    hasRooms: !!selectedRooms,
-    isArray: Array.isArray(selectedRooms),
-    length: selectedRooms?.length,
-  });
-
   if (
     !selectedRooms ||
     !Array.isArray(selectedRooms) ||
     selectedRooms.length === 0
   ) {
-    console.log("Invalid room selection");
     return res.status(400).json({
       success: false,
       message: "Vui lòng chọn ít nhất một phòng.",
@@ -132,7 +103,6 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
   });
 
   if (isNaN(checkIn.getTime()) || checkIn < new Date()) {
-    console.log("Invalid check-in date");
     return res.status(400).json({
       success: false,
       message: "Ngày check-in không hợp lệ hoặc đã qua.",
@@ -140,19 +110,16 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
   }
 
   if (!req.user.customerId) {
-    console.log("No customer ID found in token");
     return res.status(401).json({
       success: false,
       message: "Không tìm thấy thông tin khách hàng từ token.",
     });
   }
 
-  console.log("Starting database transaction");
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    console.log("Finding customer with ID:", req.user.customerId);
     const customer = await Customer.findById(req.user.customerId).session(
       session
     );
@@ -164,6 +131,8 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
         message: "Không tìm thấy thông tin khách hàng.",
       });
     }
+
+    console.log("selectedServices nhận từ FE:", selectedServices);
 
     // Update customer info if provided
     console.log("Checking for customer info updates");
@@ -249,22 +218,14 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
     const savedBookingOrder = await newBookingOrder.save({ session });
     console.log("Booking order saved successfully:", savedBookingOrder._id);
 
-    if (requestType === "pending_payment") {
-      // Xóa các BookingRoom cũ nếu có (phòng tránh trùng khi update)
-      await BookingRoom.deleteMany(
-        { bookingId: savedBookingOrder._id },
-        { session }
-      );
-      for (const room of processedRooms) {
-        await BookingRoom.create(
-          [
-            {
-              bookingId: savedBookingOrder._id,
-              roomId: room.id,
-              quantity: room.quantity,
-              price: room.price,
-            },
-          ],
+    // Lưu các dịch vụ đã chọn vào bảng bookingService
+    if (Array.isArray(selectedServices) && selectedServices.length > 0) {
+      for (const service of selectedServices) {
+        await BookingService.create(
+          {
+            bookingId: savedBookingOrder._id,
+            serviceId: service.id || service._id || service,
+          },
           { session }
         );
       }
@@ -276,7 +237,6 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
         savedBookingOrder.checkInDate
       ).toLocaleDateString("vi-VN");
       if (requestType === "consultation_requested") {
-        const { sendConsultationEmail } = require("../utils/sendMail");
         await sendConsultationEmail(
           email,
           fullName,
@@ -286,7 +246,6 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
           requirements
         );
       } else if (requestType === "pending_payment") {
-        const { sendBookingConfirmationEmail } = require("../utils/sendMail");
         await sendBookingConfirmationEmail(
           email,
           fullName,
@@ -318,6 +277,7 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
         consultationStatus: savedBookingOrder.consultationStatus,
         amount: savedBookingOrder.amount,
         paymentBreakdown: savedBookingOrder.paymentBreakdown,
+        selectedServices: selectedServices,
       },
     });
   } catch (error) {
@@ -366,6 +326,11 @@ exports.getConsultationRequest = asyncHandler(async (req, res) => {
     });
   }
 
+  // Lấy dịch vụ đã lưu
+  const services = await BookingService.find({
+    bookingId: consultation._id,
+  }).populate("serviceId");
+
   res.status(200).json({
     success: true,
     data: {
@@ -386,6 +351,7 @@ exports.getConsultationRequest = asyncHandler(async (req, res) => {
       totalPrice: consultation.consultationData.estimatedPrice,
       yachtId: consultation.yacht,
       scheduleId: consultation.schedule || null,
+      services,
     },
   });
 });
@@ -644,7 +610,7 @@ exports.updateBookingStatus = asyncHandler(async (req, res) => {
 
 exports.confirmBooking = asyncHandler(async (req, res) => {
   const { id } = req.params; // BookingOrder ID
-  const { scheduleId } = req.body;
+  const { scheduleId, selectedServices = [] } = req.body;
 
   console.log(
     "Received confirm request for BookingOrder ID:",
@@ -735,6 +701,20 @@ exports.confirmBooking = asyncHandler(async (req, res) => {
     } else if (existingBookingRooms.length === 0) {
       console.warn(
         `BookingOrder ${booking._id} confirmed, but no requestedRooms found in consultationData or BookingRooms already exist.`
+      );
+    }
+
+    // Lưu các dịch vụ đi kèm khi xác nhận booking
+    if (Array.isArray(selectedServices) && selectedServices.length > 0) {
+      await BookingService.deleteMany({ bookingId: booking._id }, { session }); // Xóa cũ nếu có
+      const bookingServiceDocs = selectedServices.map((serviceId) => ({
+        bookingId: booking._id,
+        serviceId,
+      }));
+      await BookingService.insertMany(bookingServiceDocs, { session });
+      console.log(
+        "Đã lưu các dịch vụ đi kèm cho booking khi xác nhận:",
+        bookingServiceDocs
       );
     }
 
@@ -993,6 +973,25 @@ exports.updateBookingOrConsultationRequest = asyncHandler(async (req, res) => {
       }
     }
 
+    // Xử lý cập nhật dịch vụ đi kèm
+    if (Array.isArray(req.body.selectedServices)) {
+      // Xóa các dịch vụ cũ
+      await BookingService.deleteMany(
+        { bookingId: savedBookingOrder._id },
+        { session }
+      );
+      // Thêm các dịch vụ mới
+      for (const service of req.body.selectedServices) {
+        await BookingService.create(
+          {
+            bookingId: savedBookingOrder._id,
+            serviceId: service.id || service._id || service,
+          },
+          { session }
+        );
+      }
+    }
+
     await session.commitTransaction();
 
     res.status(200).json({
@@ -1109,6 +1108,11 @@ exports.getBookingWithTransactions = asyncHandler(async (req, res) => {
       createdAt: -1,
     });
 
+    // Lấy dịch vụ đã lưu
+    const services = await BookingService.find({
+      bookingId: booking._id,
+    }).populate("serviceId");
+
     res.json({
       success: true,
       data: {
@@ -1116,6 +1120,7 @@ exports.getBookingWithTransactions = asyncHandler(async (req, res) => {
         transactions,
         bookedRooms,
         invoices, // Replaced 'bill' with 'invoices' as it's an array
+        services, // Thêm dòng này
       },
     });
   } catch (error) {
@@ -1153,11 +1158,6 @@ exports.getCustomerBookings = asyncHandler(async (req, res) => {
   });
 });
 
-/**
- * @desc    Get a single booking detail for the logged-in customer
- * @route   GET /api/v1/bookings/:bookingId/my-detail
- * @access  Private (Customer)
- */
 exports.getCustomerBookingDetail = asyncHandler(async (req, res) => {
   if (!req.user.customerId) {
     return res.status(401).json({
@@ -1194,9 +1194,12 @@ exports.getCustomerBookingDetail = asyncHandler(async (req, res) => {
   // (Tùy chọn) Lấy thêm thông tin phòng đã đặt, giao dịch, hóa đơn
   const bookedRooms = await BookingRoom.find({
     bookingId: booking._id,
-  }).populate("roomId", "name price"); // Giả sử 'roomId' là ref đến model Room
+  }).populate("roomId", "name price");
 
-  // const transactions = await Transaction.find({ bookingId: booking._id }); // Sẽ được lấy từ P.Controller
+  // Lấy dịch vụ đã lưu
+  const services = await BookingService.find({
+    bookingId: booking._id,
+  }).populate("serviceId");
 
   res.status(200).json({
     success: true,
@@ -1208,7 +1211,7 @@ exports.getCustomerBookingDetail = asyncHandler(async (req, res) => {
         childrenAbove10: booking.childrenAbove10,
       },
       bookedRooms,
-      // transactions, // Frontend nên gọi API riêng để lấy transactions.
+      services,
     },
   });
 });
@@ -1274,11 +1277,6 @@ exports.updateCustomerInfo = asyncHandler(async (req, res) => {
   }
 });
 
-/**
- * @desc    Customer cancels their own booking
- * @route   PUT /api/v1/bookings/:bookingId/cancel
- * @access  Private (Customer)
- */
 exports.customerCancelBooking = asyncHandler(async (req, res) => {
   const { bookingId } = req.params;
 
@@ -1317,8 +1315,6 @@ exports.customerCancelBooking = asyncHandler(async (req, res) => {
         .json({ success: false, message: "Không có quyền hủy booking này." });
     }
 
-    // Logic kiểm tra điều kiện hủy (ví dụ: trước ngày check-in bao lâu, trạng thái hiện tại)
-    // Ví dụ: không cho hủy nếu đã "completed" hoặc "cancelled"
     if (["completed", "cancelled", "rejected"].includes(booking.status)) {
       await session.abortTransaction();
       session.endSession();
@@ -1328,22 +1324,7 @@ exports.customerCancelBooking = asyncHandler(async (req, res) => {
       });
     }
 
-    // Ví dụ: Kiểm tra deadline hủy (nếu có)
-    // if (booking.modificationDeadline && new Date() > booking.modificationDeadline) {
-    //   // Hoặc một deadline hủy riêng
-    //   return res.status(400).json({ message: "Đã quá hạn hủy booking." });
-    // }
-
     booking.status = "cancelled";
-    // booking.cancelledAt = new Date(); // pre-save hook sẽ xử lý
-
-    // TODO: Xử lý logic hoàn tiền nếu có.
-    // Việc này có thể phức tạp:
-    // 1. Kiểm tra chính sách hoàn tiền.
-    // 2. Nếu đủ điều kiện, tạo một Transaction refund.
-    // 3. Gọi API refund của cổng thanh toán.
-    // 4. Cập nhật paymentStatus, totalPaid của BookingOrder.
-    // Hiện tại, chỉ đổi status, không xử lý refund tự động ở đây.
 
     const updatedBooking = await booking.save({ session });
     await session.commitTransaction();
