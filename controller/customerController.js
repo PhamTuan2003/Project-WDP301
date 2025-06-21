@@ -1,8 +1,7 @@
 const { Customer, Account } = require("../model");
 const bcryptjs = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-// const { sendOTP } = require("../utils/mailer");
-// const redisClient = require("../utils/redis");
+const { sendOTP } = require("../utils/sendMail");
 const { OAuth2Client } = require("google-auth-library");
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -166,87 +165,6 @@ const googleLogin = async (req, res) => {
   }
 };
 
-// Hàm quên mật khẩu
-// const forgotPassword = async (req, res) => {
-//   const { username } = req.body;
-//   if (!username) {
-//     return res.status(400).json({ message: "Vui lòng nhập username" });
-//   }
-
-//   try {
-//     const account = await Account.findOne({ username, roles: "CUSTOMER" });
-//     if (!account) {
-//       return res.status(404).json({ message: "Tài khoản không tồn tại hoặc không phải khách hàng" });
-//     }
-
-//     const customer = await Customer.findOne({ accountId: account._id });
-//     if (!customer || !customer.email) {
-//       return res.status(404).json({ message: "Không tìm thấy email của khách hàng" });
-//     }
-
-//     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-//     await redisClient.setEx(`otp:${username}`, 10 * 60, otp);
-
-//     const sent = await sendOTP(customer.email, otp);
-//     if (!sent) {
-//       return res.status(500).json({ message: "Lỗi gửi email OTP" });
-//     }
-
-//     res.status(200).json({ message: "OTP đã được gửi đến email của bạn" });
-//   } catch (error) {
-//     console.error("Error in forgot-password:", error);
-//     res.status(500).json({ message: "Lỗi server" });
-//   }
-// };
-
-// Hàm xác thực OTP
-// const verifyOtp = async (req, res) => {
-//   const { username, otp } = req.body;
-//   if (!username || !otp) {
-//     return res.status(400).json({ message: "Vui lòng nhập username và OTP" });
-//   }
-
-//   try {
-//     const storedOtp = await redisClient.get(`otp:${username}`);
-//     if (!storedOtp || storedOtp !== otp) {
-//       return res.status(400).json({ message: "OTP không hợp lệ hoặc đã hết hạn" });
-//     }
-
-//     await redisClient.del(`otp:${username}`);
-//     res.status(200).json({ message: "Xác thực OTP thành công" });
-//   } catch (error) {
-//     console.error("Error in verify-otp:", error);
-//     res.status(500).json({ message: "Lỗi server" });
-//   }
-// };
-
-// // Hàm đặt lại mật khẩu
-// const resetPassword = async (req, res) => {
-//   const { username, newPassword } = req.body;
-//   if (!username || !newPassword) {
-//     return res.status(400).json({ message: "Vui lòng nhập username và mật khẩu mới" });
-//   }
-
-//   if (newPassword.length < 6) {
-//     return res.status(400).json({ message: "Mật khẩu mới phải có ít nhất 6 ký tự" });
-//   }
-
-//   try {
-//     const account = await Account.findOne({ username, roles: "CUSTOMER" });
-//     if (!account) {
-//       return res.status(404).json({ message: "Tài khoản không tồn tại hoặc không phải khách hàng" });
-//     }
-
-//     account.password = newPassword;
-//     await account.save();
-
-//     return res.status(200).json({ message: "Đặt lại mật khẩu thành công" });
-//   } catch (error) {
-//     console.error("Error in reset-password:", error);
-//     return res.status(500).json({ message: "Lỗi server khi đặt lại mật khẩu" });
-//   }
-// };
-
 // Hàm cập nhật thông tin khách hàng
 const updateCustomer = async (req, res) => {
   const { id } = req.params;
@@ -270,7 +188,11 @@ const updateCustomer = async (req, res) => {
     }
     if (phoneNumber) {
       if (!/^(?:\+84|0)(3[2-9]|5[6-9]|7[0-9]|8[1-9]|9[0-9])[0-9]{7}$/.test(phoneNumber)) {
-        return res.status(400).json({ message: "Số điện thoại không hợp lệ (phải bắt đầu bằng 0 hoặc +84, theo sau là đầu số hợp lệ và 7 chữ số)" });
+        return res
+          .status(400)
+          .json({
+            message: "Số điện thoại không hợp lệ (phải bắt đầu bằng 0 hoặc +84, theo sau là đầu số hợp lệ và 7 chữ số)",
+          });
       }
       customer.phoneNumber = phoneNumber;
     }
@@ -335,50 +257,143 @@ const uploadCustomerAvatar = async (req, res) => {
   }
 };
 
-// const changePassword = async (req, res) => {
-//   const { username, oldPassword, newPassword, confirmPassword } = req.body;
+// Hàm đổi mật khẩu khi đã login, không cần otp
+const changePassword = async (req, res) => {
+  const { username, oldPassword, newPassword, confirmPassword } = req.body;
 
-//   if (!username || !oldPassword || !newPassword || !confirmPassword) {
-//     return res.status(400).json({ message: "Vui lòng điền đầy đủ thông tin" });
-//   }
+  if (!username || !oldPassword || !newPassword || !confirmPassword) {
+    return res.status(400).json({ message: "Vui lòng điền đầy đủ thông tin" });
+  }
 
-//   if (newPassword !== confirmPassword) {
-//     return res.status(400).json({ message: "Mật khẩu mới và xác nhận mật khẩu không khớp" });
-//   }
+  if (newPassword !== confirmPassword) {
+    return res.status(400).json({ message: "Mật khẩu mới và xác nhận mật khẩu không khớp" });
+  }
 
-//   if (newPassword.length < 6) {
-//     return res.status(400).json({ message: "Mật khẩu mới phải có ít nhất 6 ký tự" });
-//   }
+  if (newPassword.length < 6) {
+    return res.status(400).json({ message: "Mật khẩu mới phải có ít nhất 6 ký tự" });
+  }
 
-//   try {
-//     const account = await Account.findOne({ username, roles: "CUSTOMER" });
-//     if (!account) {
-//       return res.status(404).json({ message: "Tài khoản không tồn tại hoặc không phải khách hàng" });
-//     }
+  try {
+    const account = await Account.findOne({ username, roles: "CUSTOMER" });
+    if (!account) {
+      return res.status(404).json({ message: "Tài khoản không tồn tại hoặc không phải khách hàng" });
+    }
 
-//     const isMatch = await bcryptjs.compare(oldPassword, account.password);
-//     if (!isMatch) {
-//       return res.status(400).json({ message: "Mật khẩu cũ không đúng" });
-//     }
+    const isMatch = await bcryptjs.compare(oldPassword, account.password);
+    if (!isMatch) {
+      return res.status(400).json({ message: "Mật khẩu cũ không đúng" });
+    }
 
-//     account.password = newPassword;
-//     await account.save();
+    account.password = newPassword;
+    await account.save();
 
-//     res.status(200).json({ message: "Đổi mật khẩu thành công" });
-//   } catch (error) {
-//     console.error("Error in change-password:", error);
-//     res.status(500).json({ message: "Lỗi server khi đổi mật khẩu" });
-//   }
-// };
+    res.status(200).json({ message: "Đổi mật khẩu thành công" });
+  } catch (error) {
+    console.error("Error in change-password:", error);
+    res.status(500).json({ message: "Lỗi server khi đổi mật khẩu" });
+  }
+};
+
+// Hàm quên mật khẩu
+const forgotPassword = async (req, res) => {
+  const { username } = req.body;
+  if (!username) {
+    return res.status(400).json({ message: "Vui lòng nhập username" });
+  }
+
+  try {
+    const account = await Account.findOne({ username, roles: "CUSTOMER" });
+    if (!account) {
+      return res.status(404).json({ message: "Tài khoản không tồn tại hoặc không phải khách hàng" });
+    }
+
+    const customer = await Customer.findOne({ accountId: account._id });
+    if (!customer || !customer.email) {
+      return res.status(404).json({ message: "Không tìm thấy email của khách hàng" });
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const sent = await sendOTP(customer.email, otp);
+    if (!sent) {
+      return res.status(500).json({ message: "Lỗi gửi email OTP, vui lòng thử lại" });
+    }
+
+    res.status(200).json({ message: "OTP đã được gửi đến email của bạn", otp }); // Gửi OTP về frontend để lưu
+  } catch (error) {
+    console.error("Error in forgot-password:", error);
+    res.status(500).json({ message: "Lỗi server khi gửi OTP" });
+  }
+};
+
+// Hàm xác thực OTP
+const verifyOtp = async (req, res) => {
+  const { username, otp } = req.body;
+  if (!username || !otp) {
+    return res.status(400).json({ message: "Vui lòng nhập username và OTP" });
+  }
+
+  try {
+    const account = await Account.findOne({ username, roles: "CUSTOMER" });
+    if (!account) {
+      return res.status(404).json({ message: "Tài khoản không tồn tại hoặc không phải khách hàng" });
+    }
+
+    const customer = await Customer.findOne({ accountId: account._id });
+    if (!customer) {
+      return res.status(404).json({ message: "Không tìm thấy khách hàng" });
+    }
+
+    // Giả định frontend gửi lại OTP đã nhận từ email
+    if (otp !== req.body.otp) { // So sánh với OTP từ client
+      return res.status(400).json({ message: "OTP không hợp lệ" });
+    }
+
+    res.status(200).json({ message: "Xác thực OTP thành công" });
+  } catch (error) {
+    console.error("Error in verify-otp:", error);
+    res.status(500).json({ message: "Lỗi server khi xác thực OTP" });
+  }
+};
+
+// Hàm đặt lại mật khẩu
+const resetPassword = async (req, res) => {
+  const { username, newPassword } = req.body;
+  if (!username || !newPassword) {
+    return res.status(400).json({ message: "Vui lòng nhập username và mật khẩu mới" });
+  }
+
+  if (newPassword.length < 6) {
+    return res.status(400).json({ message: "Mật khẩu mới phải có ít nhất 6 ký tự" });
+  }
+
+  try {
+    const account = await Account.findOne({ username, roles: "CUSTOMER" });
+    if (!account) {
+      return res.status(404).json({ message: "Tài khoản không tồn tại hoặc không phải khách hàng" });
+    }
+
+    // Hash mật khẩu mới
+    const salt = await bcryptjs.genSalt(10);
+    const hashedPassword = await bcryptjs.hash(newPassword, salt);
+
+    account.password = hashedPassword;
+    await account.save();
+
+    res.status(200).json({ message: "Đặt lại mật khẩu thành công" });
+  } catch (error) {
+    console.error("Error in reset-password:", error);
+    res.status(500).json({ message: "Lỗi server khi đặt lại mật khẩu" });
+  }
+};
 
 module.exports = {
   register,
   login,
-  // forgotPassword,
-  // verifyOtp,
-  // resetPassword,
   googleLogin,
   updateCustomer,
   uploadCustomerAvatar,
-  // changePassword,
+  forgotPassword,
+  verifyOtp,
+  resetPassword,
+  changePassword
 };

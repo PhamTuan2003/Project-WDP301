@@ -1,9 +1,4 @@
-const BookingOrder = require("../model/bookingOrder");
-const BookingRoom = require("../model/bookingRoom");
-const Invoice = require("../model/invoiceSchema");
-const Transaction = require("../model/transaction");
-const Customer = require("../model/customer");
-const Yacht = require("../model/yachtSchema");
+const { BookingOrder, BookingRoom, Invoice, Transaction, Customer, Yacht } = require("../model");
 const asyncHandler = require("express-async-handler");
 const mongoose = require("mongoose");
 const { v4: uuidv4 } = require("uuid");

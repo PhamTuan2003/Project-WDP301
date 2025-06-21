@@ -66,14 +66,7 @@ async function sendBookingConfirmationEmail(
 }
 
 // Hàm gửi email xác nhận đăng ký tư vấn
-async function sendConsultationEmail(
-  to,
-  fullName,
-  bookingCode,
-  checkInDate,
-  guestCount,
-  requirements
-) {
+async function sendConsultationEmail(to, fullName, bookingCode, checkInDate, guestCount, requirements) {
   if (!to || !/^[\w-.]+@([\w-]+\.)+[\w-]{2,}$/.test(to)) {
     throw new Error("Email không hợp lệ hoặc không tìm thấy email.");
   }
@@ -130,8 +123,83 @@ async function testSendMail(to) {
   return transporter.sendMail(mailOptions);
 }
 
-module.exports = {
-  sendBookingConfirmationEmail,
-  sendConsultationEmail,
-  testSendMail,
-};
+// Hàm gửi OTP để đặt lại mật khẩu
+async function sendOTP(to, otp) {
+  if (!to || !/^[\w-.]+@([\w-]+\.)+[\w-]{2,}$/.test(to)) {
+    throw new Error("Email không hợp lệ hoặc không tìm thấy email.");
+  }
+  const subject = "Mã OTP để đặt lại mật khẩu";
+  const text = `Mã OTP của bạn là: ${otp}. Vui lòng không chia sẻ mã này với bất kỳ ai. Mã sẽ tồn tại trong email này cho đến khi bạn xóa nó khỏi thùng rác.`;
+  const html = `
+    <!DOCTYPE html>
+    <!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mã OTP đặt lại mật khẩu</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      background: #f6f8fa;
+      margin: 0;
+      padding: 0;
+    }
+  </style>
+</head>
+<body>
+  <table width="100%" bgcolor="#f6f8fa" cellpadding="0" cellspacing="0">
+    <tr>
+      <td>
+        <table align="center" width="600" style="background: #fff; border-radius: 12px; margin: 40px auto; box-shadow: 0 4px 12px rgba(0,0,0,0.1); overflow: hidden;">
+          <!-- Header -->
+          <tr>
+            <td style="background: #dc2626; color: #fff; padding: 24px 32px; text-align: center;">
+              <h2 style="margin: 0; font-size: 22px;">🔐 MÃ OTP ĐẶT LẠI MẬT KHẨU</h2>
+            </td>
+          </tr>
+          <!-- Body -->
+          <tr>
+            <td style="padding: 32px;">
+              <p style="font-size: 16px;">Xin chào,</p>
+              <p style="font-size: 16px;">Bạn hoặc ai đó vừa yêu cầu đặt lại mật khẩu cho tài khoản tại <strong>𝓛𝓸𝓷𝓰𝓦𝓪𝓿𝓮</strong>.</p>
+
+              <!-- OTP Block -->
+              <div style="margin: 24px 0; text-align: center;">
+                <p style="font-size: 18px; margin-bottom: 8px;">Mã OTP của bạn là:</p>
+                <div style="display: inline-block; padding: 12px 24px; background: #fee2e2; border-radius: 8px; font-size: 28px; letter-spacing: 4px; color: #dc2626; font-weight: bold;">
+                  ${otp}
+                </div>
+              </div>
+
+              <p style="font-size: 15px;"><strong>Quan trọng:</strong> Không chia sẻ mã này với bất kỳ ai. Ngay cả nhân viên của 𝓛𝓸𝓷𝓰𝓦𝓪𝓿𝓮 cũng không được phép hỏi mã này.</p>
+              <p style="font-size: 15px;">Nếu bạn không yêu cầu đổi mật khẩu, hãy bỏ qua email này và kiểm tra lại bảo mật tài khoản.</p>
+
+              <p style="margin-top: 40px; font-size: 15px;">Trân trọng,<br/>Đội ngũ <strong>𝓛𝓸𝓷𝓰𝓦𝓪𝓿𝓮</strong></p>
+            </td>
+          </tr>
+          <!-- Footer -->
+          <tr>
+            <td style="background: #fef2f2; color: #6b7280; text-align: center; font-size: 13px; padding: 20px;">
+              © 2025 𝓛𝓸𝓷𝓰𝓦𝓪𝓿𝓮. Mọi quyền được bảo lưu.
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+
+  `;
+  const mailOptions = {
+    from: process.env.EMAIL_USER,
+    to,
+    subject,
+    text,
+    html,
+  };
+  return transporter.sendMail(mailOptions);
+}
+
+module.exports = { sendBookingConfirmationEmail,sendConsultationEmail, testSendMail, sendOTP };
