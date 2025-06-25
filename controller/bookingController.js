@@ -40,7 +40,7 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
     email,
     address,
     requestType = "consultation_requested",
-    selectedServices = [],
+    selectedServices,
   } = req.body;
 
   const requiredFields = {
@@ -95,12 +95,6 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
   }
 
   const checkIn = new Date(checkInDate);
-  console.log("Validating check-in date:", {
-    checkInDate,
-    parsedDate: checkIn,
-    isValid: !isNaN(checkIn.getTime()),
-    isFuture: checkIn > new Date(),
-  });
 
   if (isNaN(checkIn.getTime()) || checkIn < new Date()) {
     return res.status(400).json({
@@ -124,18 +118,12 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
       session
     );
     if (!customer) {
-      console.log("Customer not found");
       await session.abortTransaction();
       return res.status(404).json({
         success: false,
         message: "Không tìm thấy thông tin khách hàng.",
       });
     }
-
-    console.log("selectedServices nhận từ FE:", selectedServices);
-
-    // Update customer info if provided
-    console.log("Checking for customer info updates");
     const customerUpdates = {};
     if (fullName && customer.fullName !== fullName)
       customerUpdates.fullName = fullName;
@@ -145,42 +133,71 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
     if (address && customer.address !== address)
       customerUpdates.address = address;
 
-    console.log("Customer updates to apply:", customerUpdates);
-
     if (Object.keys(customerUpdates).length > 0) {
       Object.assign(customer, customerUpdates);
       await customer.save({ session });
-      console.log("Customer info updated successfully");
     }
 
     const totalGuestCount = parseGuestCount(guestCount);
-    console.log("Parsed total guest count:", totalGuestCount);
+    const processedServices = (selectedServices || []).map((service, index) => {
+      const serviceId = service.serviceId || service._id || service.id;
+      const serviceName = service.serviceName || service.name;
+      const servicePrice =
+        service.servicePrice !== undefined
+          ? service.servicePrice
+          : service.price;
+      const serviceQuantity =
+        service.serviceQuantity !== undefined
+          ? service.serviceQuantity
+          : service.quantity;
 
-    // Validate room data
-    console.log("Processing selected rooms data");
-    const processedRooms = selectedRooms.map((room, index) => {
-      console.log(`Processing room ${index + 1}:`, room);
-      if (!room.id || !room.name || !room.quantity || !room.price) {
-        throw new Error(`Thông tin phòng thứ ${index + 1} không đầy đủ`);
+      if (!serviceId) {
+        throw new Error(`ID dịch vụ thứ ${index + 1} không tồn tại.`);
       }
-      if (room.quantity <= 0 || room.price <= 0) {
-        throw new Error(`Số lượng và giá phòng phải lớn hơn 0`);
+      if (!serviceName) {
+        throw new Error(
+          `Tên dịch vụ (serviceName) thứ ${index + 1} không tồn tại.`
+        );
+      }
+      if (typeof servicePrice !== "number" || servicePrice < 0) {
+        throw new Error(`Giá dịch vụ thứ ${index + 1} không hợp lệ.`);
       }
       return {
-        id: room.id,
-        name: room.name,
-        description: room.description || "",
-        area: room.area || 0,
-        avatar: room.avatar || "",
-        max_people: room.max_people || 1,
-        price: room.price,
-        quantity: room.quantity,
-        beds: room.beds || 1,
-        image: room.image || room.avatar || "",
+        serviceId,
+        serviceName,
+        servicePrice,
+        serviceQuantity: serviceQuantity || totalGuestCount,
       };
     });
 
-    console.log("Creating new booking order data");
+    // Validate room data
+    const processedRooms = selectedRooms.map((room, index) => {
+      const roomId = room.roomId || room.id;
+      const roomName = room.roomName || room.name;
+      const roomPrice =
+        room.roomPrice !== undefined ? room.roomPrice : room.price;
+      const roomQuantity =
+        room.roomQuantity !== undefined ? room.roomQuantity : room.quantity;
+
+      if (!roomId || !roomName || !roomQuantity || !roomPrice) {
+        throw new Error(`Thông tin phòng thứ ${index + 1} không đầy đủ`);
+      }
+      if (roomQuantity <= 0 || roomPrice <= 0) {
+        throw new Error(`Số lượng và giá phòng phải lớn hơn 0`);
+      }
+      return {
+        roomId: roomId,
+        roomName: roomName,
+        roomDescription: room.roomDescription || room.description || "",
+        roomArea: room.roomArea || room.area || 0,
+        roomMaxPeople: room.roomMaxPeople || room.max_people || 1,
+        roomPrice: roomPrice,
+        roomQuantity: roomQuantity,
+        roomBeds: room.roomBeds || room.beds,
+        roomImage: room.roomImage || (room.images && room.images[0]) || "",
+      };
+    });
+
     const newBookingOrderData = {
       customer: customer._id,
       customerInfo: {
@@ -205,7 +222,7 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
       checkInDate: checkIn,
       consultationData: {
         requestedRooms: processedRooms,
-        requestServices: selectedServices,
+        requestServices: processedServices,
         estimatedPrice: totalPrice || 0,
         status:
           requestType === "consultation_requested" ? "pending" : "completed",
@@ -214,10 +231,8 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
       confirmationCode: uuidv4().replace(/-/g, ""),
     };
 
-    console.log("Saving new booking order");
     const newBookingOrder = new BookingOrder(newBookingOrderData);
     const savedBookingOrder = await newBookingOrder.save({ session });
-    console.log("Booking order saved successfully:", savedBookingOrder._id);
 
     // Gửi email xác nhận theo loại booking
     try {
@@ -244,12 +259,10 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
         );
       }
     } catch (mailErr) {
-      console.error("Lỗi gửi email:", mailErr.message);
       // Không throw lỗi này để không ảnh hưởng tới booking, chỉ log lại
     }
 
     await session.commitTransaction();
-    console.log("Transaction committed successfully");
 
     res.status(201).json({
       success: true,
@@ -269,9 +282,7 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Error in createBookingOrConsultationRequest:", error);
     await session.abortTransaction();
-    console.error("Lỗi tạo booking/consultation request:", error);
     res.status(500).json({
       success: false,
       message: "Lỗi server khi xử lý yêu cầu.",
@@ -281,7 +292,6 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
           : "Internal server error",
     });
   } finally {
-    console.log("Ending database session");
     session.endSession();
   }
 });
@@ -314,11 +324,6 @@ exports.getConsultationRequest = asyncHandler(async (req, res) => {
     });
   }
 
-  // Lấy dịch vụ đã lưu
-  const services = await BookingService.find({
-    bookingId: consultation._id,
-  }).populate("serviceId");
-
   res.status(200).json({
     success: true,
     data: {
@@ -339,7 +344,7 @@ exports.getConsultationRequest = asyncHandler(async (req, res) => {
       totalPrice: consultation.consultationData.estimatedPrice,
       yachtId: consultation.yacht,
       scheduleId: consultation.schedule || null,
-      services,
+      selectedServices: consultation.consultationData.requestServices,
     },
   });
 });
@@ -424,9 +429,9 @@ exports.customerConfirmBookingAfterConsultation = asyncHandler(
         const rooms = (populatedBooking.consultationData?.requestedRooms || [])
           .map(
             (room) =>
-              `<li>${room.name} x ${room.quantity} (${
-                room.area || "?"
-              }m²) - ${room.price?.toLocaleString("vi-VN")} VNĐ</li>`
+              `<li>${room.roomName} x ${room.roomQuantity} (${
+                room.roomArea || "?"
+              }m²) - ${room.roomPrice?.toLocaleString("vi-VN")} VNĐ</li>`
           )
           .join("");
         const roomListHtml = rooms ? `<ul>${rooms}</ul>` : "Không có";
@@ -445,12 +450,7 @@ exports.customerConfirmBookingAfterConsultation = asyncHandler(
             requirements,
           }
         );
-      } catch (mailErr) {
-        console.error(
-          "Lỗi gửi email xác nhận đặt phòng sau tư vấn:",
-          mailErr.message
-        );
-      }
+      } catch (mailErr) {}
 
       await session.commitTransaction();
       session.endSession();
@@ -469,7 +469,6 @@ exports.customerConfirmBookingAfterConsultation = asyncHandler(
     } catch (error) {
       await session.abortTransaction();
       session.endSession();
-      console.error("Lỗi customer confirm booking after consultation:", error);
       res.status(500).json({
         success: false,
         message: "Lỗi server khi xác nhận booking.",
@@ -557,15 +556,14 @@ exports.updateBookingStatus = asyncHandler(async (req, res) => {
           (roomData) => {
             const newBookingRoom = new BookingRoom({
               bookingId: booking._id,
-              roomId: roomData.id, // This is the ObjectId of the actual Room
-              quantity: roomData.quantity,
-              price: roomData.price, // This is the total price for this room selection (price for quantity)
+              roomId: roomData.roomId,
+              quantity: roomData.roomQuantity,
+              price: roomData.roomPrice,
             });
             return newBookingRoom.save({ session });
           }
         );
         await Promise.all(bookingRoomPromises);
-        console.log(`BookingRooms created for BookingOrder ${booking._id}`);
       }
     }
     // pre-save hook handles other status-related timestamps (cancelledAt, etc.)
@@ -587,7 +585,6 @@ exports.updateBookingStatus = asyncHandler(async (req, res) => {
   } catch (error) {
     await session.abortTransaction();
     session.endSession();
-    console.error("Lỗi cập nhật status booking:", error);
     res.status(500).json({
       success: false,
       message: "Lỗi server khi cập nhật status booking.",
@@ -599,13 +596,6 @@ exports.updateBookingStatus = asyncHandler(async (req, res) => {
 exports.confirmBooking = asyncHandler(async (req, res) => {
   const { id } = req.params; // BookingOrder ID
   const { scheduleId, selectedServices = [] } = req.body;
-
-  console.log(
-    "Received confirm request for BookingOrder ID:",
-    id,
-    "with scheduleId:",
-    scheduleId
-  );
 
   if (!id) {
     return res.status(400).json({
@@ -627,12 +617,6 @@ exports.confirmBooking = asyncHandler(async (req, res) => {
         message: `Không tìm thấy booking với ID: ${id}`,
       });
     }
-
-    console.log(
-      "Current booking state before confirmation:",
-      booking.status,
-      booking.consultationData
-    );
 
     if (booking.status === "confirmed") {
       await session.abortTransaction(); // No need to re-confirm
@@ -675,21 +659,15 @@ exports.confirmBooking = asyncHandler(async (req, res) => {
         (roomData) => {
           const newBookingRoom = new BookingRoom({
             bookingId: booking._id,
-            roomId: roomData.id, // This is the ObjectId of the actual Room
-            quantity: roomData.quantity,
-            price: roomData.price, // This is the total price for this roomData (price for quantity)
+            roomId: roomData.roomId,
+            quantity: roomData.roomQuantity,
+            price: roomData.roomPrice,
           });
           return newBookingRoom.save({ session });
         }
       );
       await Promise.all(bookingRoomPromises);
-      console.log(
-        `BookingRooms created for BookingOrder ${booking._id} upon confirmation.`
-      );
     } else if (existingBookingRooms.length === 0) {
-      console.warn(
-        `BookingOrder ${booking._id} confirmed, but no requestedRooms found in consultationData or BookingRooms already exist.`
-      );
     }
 
     // Lưu các dịch vụ đi kèm khi xác nhận booking
@@ -698,23 +676,17 @@ exports.confirmBooking = asyncHandler(async (req, res) => {
       await BookingService.deleteMany({ bookingId: booking._id }, { session }); // Xóa cũ nếu có
       const bookingServiceDocs = requestServices.map((service) => ({
         bookingId: booking._id,
-        serviceId: service.id || service._id || service,
-        price: service.price,
-        quantity: service.quantity,
-        name: service.name,
+        serviceId: service.serviceId,
+        price: service.servicePrice,
+        quantity: service.serviceQuantity,
+        name: service.serviceName,
       }));
       await BookingService.insertMany(bookingServiceDocs, { session });
-      console.log(
-        "Đã lưu các dịch vụ đi kèm cho booking khi xác nhận:",
-        bookingServiceDocs
-      );
     }
 
     const updatedBooking = await booking.save({ session });
     await session.commitTransaction();
     session.endSession();
-
-    console.log("Updated booking after confirmation:", updatedBooking);
 
     res.status(200).json({
       success: true,
@@ -731,7 +703,7 @@ exports.confirmBooking = asyncHandler(async (req, res) => {
   } catch (error) {
     await session.abortTransaction();
     session.endSession();
-    console.error("Lỗi xác nhận booking:", error);
+
     res.status(500).json({
       success: false,
       message: "Lỗi server khi xác nhận booking",
@@ -807,7 +779,6 @@ exports.rejectBooking = asyncHandler(async (req, res) => {
   } catch (error) {
     await session.abortTransaction();
     session.endSession();
-    console.error("Lỗi hủy/từ chối booking:", error);
     res.status(500).json({
       success: false,
       message: "Lỗi server khi hủy/từ chối booking.",
@@ -817,13 +788,6 @@ exports.rejectBooking = asyncHandler(async (req, res) => {
 });
 // NEW: Controller to UPDATE an existing request
 exports.updateBookingOrConsultationRequest = asyncHandler(async (req, res) => {
-  // LOG giá trị nhận được từ FE
-  console.log("[updateBookingOrConsultationRequest] Nhận từ FE:", {
-    checkInDate: req.body.checkInDate,
-    guestCount: req.body.guestCount,
-    bookingId: req.params.bookingId,
-    fullBody: req.body,
-  });
   const { bookingId } = req.params;
   const {
     yachtId,
@@ -880,15 +844,10 @@ exports.updateBookingOrConsultationRequest = asyncHandler(async (req, res) => {
     }
 
     // Update customer info if it has changed
-    const customerUpdates = {};
-    if (fullName && bookingOrder.customerInfo.fullName !== fullName)
-      customerUpdates["customerInfo.fullName"] = fullName;
-    if (phoneNumber && bookingOrder.customerInfo.phoneNumber !== phoneNumber)
-      customerUpdates["customerInfo.phoneNumber"] = phoneNumber;
-    if (email && bookingOrder.customerInfo.email !== email)
-      customerUpdates["customerInfo.email"] = email;
-    if (address && bookingOrder.customerInfo.address !== address)
-      customerUpdates["customerInfo.address"] = address;
+    if (fullName) bookingOrder.customerInfo.fullName = fullName;
+    if (phoneNumber) bookingOrder.customerInfo.phoneNumber = phoneNumber;
+    if (email) bookingOrder.customerInfo.email = email;
+    if (address) bookingOrder.customerInfo.address = address;
 
     // Update booking details
     bookingOrder.yacht = yachtId;
@@ -916,34 +875,28 @@ exports.updateBookingOrConsultationRequest = asyncHandler(async (req, res) => {
     // Update consultation data with the new selection
     bookingOrder.consultationData.requestedRooms = selectedRooms.map(
       (room) => ({
-        id: room.id,
-        name: room.name,
-        quantity: room.quantity,
-        price: room.price,
-        description: room.description,
-        area: room.area,
-        avatar: room.avatar,
-        max_people: room.max_people,
-        beds: room.beds,
-        image: room.image,
+        roomId: room.roomId,
+        roomName: room.roomName,
+        roomQuantity: room.roomQuantity,
+        roomPrice: room.roomPrice,
+        roomDescription: room.roomDescription,
+        roomArea: room.roomArea,
+        roomAvatar: room.roomAvatar,
+        roomMaxPeople: room.roomMaxPeople,
+        roomBeds: room.roomBeds,
+        roomImage: room.roomImage,
       })
     );
     bookingOrder.consultationData.estimatedPrice = totalPrice || 0;
     bookingOrder.consultationData.updatedAt = new Date();
 
     // Apply customer info updates if any
-    if (Object.keys(customerUpdates).length > 0) {
-      Object.assign(bookingOrder, customerUpdates);
+    if (Object.keys(bookingOrder.customerInfo).length > 0) {
+      Object.assign(bookingOrder, { customerInfo: bookingOrder.customerInfo });
     }
 
     const savedBookingOrder = await bookingOrder.save({ session });
-    // LOG giá trị sau khi lưu vào DB
-    console.log("[updateBookingOrConsultationRequest] Sau khi save vào DB:", {
-      checkInDate: savedBookingOrder.checkInDate,
-      guestCount: savedBookingOrder.guestCount,
-      bookingId: savedBookingOrder._id,
-      status: savedBookingOrder.status,
-    });
+
     // Nếu chuyển sang pending_payment, tạo lại BookingRoom
     if (requestType === "pending_payment") {
       await BookingRoom.deleteMany(
@@ -955,9 +908,9 @@ exports.updateBookingOrConsultationRequest = asyncHandler(async (req, res) => {
           [
             {
               bookingId: savedBookingOrder._id,
-              roomId: room.id,
-              quantity: room.quantity,
-              price: room.price,
+              roomId: room.roomId,
+              quantity: room.roomQuantity,
+              price: room.roomPrice,
             },
           ],
           { session }
@@ -975,16 +928,12 @@ exports.updateBookingOrConsultationRequest = asyncHandler(async (req, res) => {
       ); // Xóa cũ nếu có
       const bookingServiceDocs = requestServices.map((service) => ({
         bookingId: savedBookingOrder._id,
-        serviceId: service.id || service._id || service,
-        price: service.price,
-        quantity: service.quantity,
-        name: service.name,
+        serviceId: service.serviceId,
+        price: service.servicePrice,
+        quantity: service.serviceQuantity,
+        name: service.serviceName,
       }));
       await BookingService.insertMany(bookingServiceDocs, { session });
-      console.log(
-        "Đã lưu các dịch vụ đi kèm cho booking khi xác nhận:",
-        bookingServiceDocs
-      );
     }
 
     await session.commitTransaction();
@@ -1005,7 +954,6 @@ exports.updateBookingOrConsultationRequest = asyncHandler(async (req, res) => {
     });
   } catch (error) {
     await session.abortTransaction();
-    console.error("Lỗi cập nhật booking/consultation request:", error);
     res.status(500).json({
       success: false,
       message: "Lỗi server khi xử lý yêu cầu.",
@@ -1119,7 +1067,6 @@ exports.getBookingWithTransactions = asyncHandler(async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Lỗi lấy booking với transactions:", error);
     res.status(500).json({
       success: false,
       message: "Lỗi server khi lấy booking.",
@@ -1263,7 +1210,6 @@ exports.updateCustomerInfo = asyncHandler(async (req, res) => {
   } catch (error) {
     await session.abortTransaction();
     session.endSession();
-    console.error("Lỗi cập nhật thông tin customer:", error);
     res.status(500).json({
       success: false,
       message: "Lỗi khi cập nhật thông tin",
@@ -1333,7 +1279,6 @@ exports.customerCancelBooking = asyncHandler(async (req, res) => {
   } catch (error) {
     await session.abortTransaction();
     session.endSession();
-    console.error("Lỗi customer cancel booking:", error);
     res.status(500).json({
       success: false,
       message: "Lỗi server khi hủy booking.",
@@ -1341,3 +1286,18 @@ exports.customerCancelBooking = asyncHandler(async (req, res) => {
     });
   }
 });
+
+// Thêm API lưu dịch vụ tư vấn vào consultationData.requestServices
+exports.saveConsultationServices = async (req, res) => {
+  try {
+    const { bookingOrderId, requestServices } = req.body;
+    const booking = await BookingOrder.findByIdAndUpdate(
+      bookingOrderId,
+      { "consultationData.requestServices": requestServices },
+      { new: true }
+    );
+    res.json(booking);
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};

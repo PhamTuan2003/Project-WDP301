@@ -47,7 +47,7 @@ app.use("/api/v1/invoices", require("./routers/invoiceRouter"));
 app.use("/api/v1/feedback", require("./routers/feedbackRouter"));
 
 // SERVICES ROUTES
-app.use("/api/v1", require("./routers/serviceRouter"));
+app.use("/api/v1/services", require("./routers/serviceRouter"));
 
 app.use(errorHandler);
 const PORT = process.env.PORT || 9999;

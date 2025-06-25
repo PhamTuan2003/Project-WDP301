@@ -6,7 +6,7 @@ const bookingServiceSchema = new Schema({
   serviceId: { type: mongoose.Schema.Types.ObjectId, ref: "Service" },
   price: { type: Number },
   quantity: { type: Number },
-  name: { type: String },
+  serviceName: { type: String },
 });
 
 module.exports = mongoose.model(

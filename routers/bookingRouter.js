@@ -16,10 +16,7 @@ const {
   cancelConsultationRequest,
 } = bookingController;
 const { veryfiToken } = require("../middleware/authMiddleware"); // Assuming you have this
-const {
-  sendBookingConfirmationEmail,
-  testSendMail,
-} = require("../utils/sendMail");
+const { testSendMail } = require("../utils/sendMail");
 
 // ==================== BOOKING CREATION & CONSULTATION ====================
 router.post("/request", veryfiToken, createBookingOrConsultationRequest);
@@ -64,5 +61,12 @@ router.get("/test-send-mail", async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 });
+
+// Thêm route lưu dịch vụ tư vấn vào consultationData.requestServices
+router.post(
+  "/consultation-services",
+  veryfiToken,
+  bookingController.saveConsultationServices
+);
 
 module.exports = router;

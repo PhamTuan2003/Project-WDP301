@@ -131,24 +131,24 @@ const bookingOrderSchema = new mongoose.Schema(
     consultationData: {
       requestedRooms: [
         {
-          id: { type: String, required: true },
-          name: String,
-          description: String,
-          area: Number,
-          avatar: String,
-          max_people: Number,
-          price: Number,
-          quantity: Number,
-          beds: Number,
-          image: String,
+          roomId: { type: String, required: true },
+          roomName: String,
+          roomDescription: String,
+          roomArea: Number,
+          roomAvatar: String,
+          roomMaxPeople: Number,
+          roomPrice: Number,
+          roomQuantity: Number,
+          roomBeds: Number,
+          roomImage: String,
         },
       ],
       requestServices: [
         {
-          id: { type: String, required: true },
-          name: String,
-          price: Number,
-          quantity: Number,
+          serviceId: { type: String, required: true },
+          serviceName: String,
+          servicePrice: Number,
+          serviceQuantity: Number,
         },
       ],
       estimatedPrice: {
@@ -216,6 +216,10 @@ const bookingOrderSchema = new mongoose.Schema(
     create_time: {
       type: Date,
       default: Date.now,
+    },
+    transactionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Transaction",
     },
   },
   {
