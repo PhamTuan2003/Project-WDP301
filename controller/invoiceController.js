@@ -241,7 +241,7 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
     doc.registerFont("Archivo-Bold", __dirname + "/../fonts/Archivo-Bold.ttf");
     doc.font("Archivo");
 
-    const filename = `invoiceBooking.pdf`;
+    const filename = `invoice-${invoice.bookingId.bookingCode}.pdf`;
     res.setHeader(
       "Content-disposition",
       `attachment; filename=\"${filename}\"`
@@ -272,18 +272,19 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
     // THÔNG TIN ĐỊNH DANH HÓA ĐƠN (box vàng)
     doc.roundedRect(40, 80, 515, 55, 8).fillAndStroke("#fffbe6", "#f59e42");
     doc.fontSize(10).fillColor("#000").font("Archivo");
-    doc.text(`Ký hiệu hóa đơn: AB/20E`, 55, 90);
-    doc.text(`Số hóa đơn: ${invoice.invoiceNumber}`, 220, 90, { width: 150 });
     doc.text(
-      `Ngày phát hành: ${
+      `Ký hiệu hóa đơn: AB/20E                Số hóa đơn: ${
+        invoice.invoiceNumber
+      }                        Ngày phát hành: ${
         invoice.issueDate?.toLocaleDateString("vi-VN") || "N/A"
       }`,
-      400,
-      90
+      55,
+      90,
+      { width: 500 }
     );
 
     // THÔNG TIN NGƯỜI BÁN (box xanh)
-    doc.roundedRect(40, 145, 240, 110, 10).fillAndStroke("#f0f9ff", "#67e8f9");
+    doc.roundedRect(40, 145, 240, 120, 10).fillAndStroke("#f0f9ff", "#67e8f9");
     doc
       .font("Archivo-Bold")
       .fontSize(11)
@@ -291,13 +292,20 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
       .text("Thông tin người bán", 55, 155);
     doc.font("Archivo").fontSize(10).fillColor("#000");
     doc.text(
-      `Tên công ty: ${invoice.companyInfo?.name || "CÔNG TY DU THUYỀN"}`,
+      `Tên công ty: ${invoice.companyInfo?.name || "CÔNG TY DU THUYỀN "}`,
       55,
       170
     );
-    doc.text(`Địa chỉ: ${invoice.companyInfo?.address || "..."}`, 55, 185, {
-      width: 210,
-    });
+    doc.text(
+      `Địa chỉ: ${
+        invoice.companyInfo?.address || "KCN Cao Hòa Lạc, Thạch Thất, Hà Nội "
+      }`,
+      55,
+      185,
+      {
+        width: 210,
+      }
+    );
     doc
       .fillColor("#e11d48")
       .text(
@@ -325,7 +333,8 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
       .text(
         `Website: ${invoice.companyInfo?.website || "www.yacht.com"}`,
         55,
-        245
+        245,
+        { width: 210 }
       );
     doc.fillColor("#000");
 
@@ -339,23 +348,13 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
     doc.font("Archivo").fontSize(10).fillColor("#000");
     doc.text(`Họ và tên: ${invoice.customerInfo?.fullName || "N/A"}`, 330, 170);
     if (invoice.customerInfo?.address)
-      doc.text(`Địa chỉ: ${invoice.customerInfo.address}`, 330, 185, {
-        width: 210,
-      });
-    if (invoice.customerInfo?.taxCode)
-      doc
-        .fillColor("#e11d48")
-        .text(`Mã số thuế: ${invoice.customerInfo.taxCode}`, 330, 200);
-    doc
-      .fillColor("#000")
-      .text(
-        `Số điện thoại: ${invoice.customerInfo?.phoneNumber || "N/A"}`,
-        330,
-        215
-      );
-    doc.text(`Email: ${invoice.customerInfo?.email || "N/A"}`, 330, 230, {
-      width: 210,
-    });
+      doc.text(`Địa chỉ: ${invoice.customerInfo.address}`, 330, 185);
+    doc.text(
+      `Số điện thoại: ${invoice.customerInfo?.phoneNumber || "N/A"}`,
+      330,
+      200
+    );
+    doc.text(`Email: ${invoice.customerInfo?.email || "N/A"}`, 330, 215);
     doc.fillColor("#000");
 
     // THÔNG TIN DỊCH VỤ (box xanh nhạt)
@@ -425,15 +424,19 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
     let tableY = yService + 85;
     const tableHeight = 30 + 24 * (invoice.items?.length || 1); // tăng chiều cao mỗi dòng
     doc.roundedRect(40, tableY, 515, tableHeight, 8).stroke("#60a5fa");
-    doc.rect(40, tableY, 515, 30).fill("#eff6ff");
+    // Vẽ header bảng với chỉ bo góc trên
+    doc.save();
+    roundedTopRect(doc, 40, tableY, 515, 30, 10);
+    doc.fill("#eff6ff");
+    doc.restore();
     doc.font("Archivo-Bold").fontSize(10).fillColor("#2563eb");
     // Cột: STT(35), Tên(140), Đơn vị(60), Số lượng(60), Đơn giá(100), Thành tiền(120)
     doc.text("STT", 50, tableY + 8, { width: 35, align: "center" });
     doc.text("Tên hàng hóa, dịch vụ", 85, tableY + 8, { width: 140 });
     doc.text("Đơn vị", 225, tableY + 8, { width: 60, align: "center" });
     doc.text("Số lượng", 285, tableY + 8, { width: 60, align: "center" });
-    doc.text("Đơn giá", 345, tableY + 8, { width: 100, align: "right" });
-    doc.text("Thành tiền", 445, tableY + 8, { width: 110, align: "right" });
+    doc.text("Đơn giá", 325, tableY + 8, { width: 100, align: "right" });
+    doc.text("Thành tiền", 435, tableY + 8, { width: 110, align: "right" });
     doc.font("Archivo").fillColor("#000");
     let rowY = tableY + 30;
     invoice.items?.forEach((item, idx) => {
@@ -445,11 +448,11 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
           : "Người";
       doc.text(unit, 225, rowY + 6, { width: 60, align: "center" });
       doc.text(item.quantity, 285, rowY + 6, { width: 60, align: "center" });
-      doc.text(item.unitPrice?.toLocaleString("vi-VN") || "0", 345, rowY + 6, {
+      doc.text(item.unitPrice?.toLocaleString("vi-VN") || "0", 330, rowY + 6, {
         width: 100,
         align: "right",
       });
-      doc.text(item.totalPrice?.toLocaleString("vi-VN") || "0", 445, rowY + 6, {
+      doc.text(item.totalPrice?.toLocaleString("vi-VN") || "0", 435, rowY + 6, {
         width: 110,
         align: "right",
       });
@@ -457,74 +460,67 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
     });
 
     // TỔNG TIỀN (box đỏ-xanh)
-    let totalY = rowY + 16;
+    let totalY = rowY + 6;
     doc
-      .roundedRect(320, totalY, 235, 98, 10)
+      .roundedRect(285, totalY, 270, 105, 10)
       .fillAndStroke("#fef2f2", "#fca5a5");
     let yTotal = totalY + 10;
     doc.font("Archivo").fontSize(10).fillColor("#000");
-    doc.text("Tổng tiền hàng hóa, dịch vụ", 330, yTotal);
+    doc.text("Tổng tiền hàng hóa, dịch vụ", 290, yTotal);
     doc.text(
       invoice.financials?.subtotal?.toLocaleString("vi-VN") || "0",
-      520,
-      yTotal,
-      { align: "right" }
+      500,
+      yTotal
     );
     yTotal += 15;
     if (invoice.financials?.totalDiscount > 0) {
-      doc.fillColor("#ef4444").text("Chiết khấu thương mại", 330, yTotal);
+      doc.fillColor("#ef4444").text("Chiết khấu thương mại", 290, yTotal);
       doc.text(
         "-" + invoice.financials.totalDiscount.toLocaleString("vi-VN"),
-        520,
-        yTotal,
-        { align: "right" }
+        500,
+        yTotal
       );
       yTotal += 15;
     }
-    doc.fillColor("#000").text("Tiền chưa có thuế VAT", 330, yTotal);
+    doc.fillColor("#000").text("Tiền chưa có thuế VAT", 290, yTotal);
     doc.text(
       (
         invoice.financials?.subtotal - invoice.financials?.totalDiscount
       ).toLocaleString("vi-VN"),
-      520,
-      yTotal,
-      { align: "right" }
+      500,
+      yTotal
     );
     yTotal += 15;
-    doc.fillColor("#f59e42").text("Thuế VAT (5%)", 330, yTotal);
+    doc.fillColor("#f59e42").text("Thuế VAT (5%)", 290, yTotal);
     doc.text(
       invoice.financials?.totalTax?.toLocaleString("vi-VN") || "0",
-      520,
-      yTotal,
-      { align: "right" }
+      535,
+      yTotal
     );
     yTotal += 15;
     doc
       .font("Archivo-Bold")
       .fillColor("#2563eb")
-      .text("TỔNG TIỀN THANH TOÁN", 330, yTotal);
+      .text("TỔNG TIỀN THANH TOÁN", 290, yTotal);
     doc.text(
       invoice.financials?.total?.toLocaleString("vi-VN") || "0",
-      520,
-      yTotal,
-      { align: "right" }
+      500,
+      yTotal
     );
     yTotal += 18;
-    doc.font("Archivo").fillColor("#22c55e").text("Đã thanh toán", 330, yTotal);
+    doc.font("Archivo").fillColor("#22c55e").text("Đã thanh toán", 290, yTotal);
     doc.text(
       invoice.financials?.paidAmount?.toLocaleString("vi-VN") || "0",
-      520,
-      yTotal,
-      { align: "right" }
+      500,
+      yTotal
     );
     yTotal += 15;
     if (invoice.financials?.remainingAmount > 0) {
-      doc.fillColor("#f59e42").text("Còn lại", 330, yTotal);
+      doc.fillColor("#f59e42").text("Còn lại", 290, yTotal);
       doc.text(
         invoice.financials?.remainingAmount?.toLocaleString("vi-VN") || "0",
-        520,
-        yTotal,
-        { align: "right" }
+        500,
+        yTotal
       );
       doc.fillColor("#000");
     }
@@ -551,12 +547,12 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
       );
       doc.text(
         `Mã giao dịch: ${invoice.transactionId.transaction_reference || "N/A"}`,
-        200,
+        370,
         yPay
       );
-      doc.fillColor("#22c55e").text("Trạng thái: Thành công", 370, yPay);
-      doc.fillColor("#000");
       yPay += 15;
+      doc.fillColor("#000");
+
       doc.text(
         `Thời gian thanh toán: ${
           invoice.transactionId.completedAt
@@ -571,6 +567,7 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
     } else {
       doc.text("Chưa có thông tin giao dịch liên kết.", 55, yPay);
     }
+    doc.fillColor("#22c55e").text("Trạng thái: Thành công", 370, yPay);
 
     // GHI CHÚ (nếu có)
     if (invoice.notes) {
@@ -651,7 +648,7 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
     doc.save();
     for (let i = 0; i < 515; i += 5) {
       doc
-        .rect(40 + i, footerY, 5, 40)
+        .rect(40 + i, footerY, 5, 50)
         .fillColor(
           `#${(192 + Math.floor((i / 515) * (219 - 192))).toString(16)}26d3`
         )
@@ -830,6 +827,19 @@ const createInvoiceManual = asyncHandler(async (req, res) => {
     });
   }
 });
+
+// Helper: Draw a rectangle with only the top corners rounded
+function roundedTopRect(doc, x, y, w, h, r) {
+  doc
+    .moveTo(x + r, y)
+    .lineTo(x + w - r, y)
+    .quadraticCurveTo(x + w, y, x + w, y + r)
+    .lineTo(x + w, y + h)
+    .lineTo(x, y + h)
+    .lineTo(x, y + r)
+    .quadraticCurveTo(x, y, x + r, y)
+    .closePath();
+}
 
 module.exports = {
   getInvoiceByTransaction,
