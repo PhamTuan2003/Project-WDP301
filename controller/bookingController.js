@@ -296,10 +296,6 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
   }
 });
 
-// DEPRECATED: This function is redundant. The logic is now handled by createBookingOrConsultationRequest.
-// exports.createConsultation = ... (function removed)
-
-// In bookingController.js
 exports.getConsultationRequest = asyncHandler(async (req, res) => {
   const { yachtId } = req.query;
   const customerId = req.user.customerId;
@@ -349,11 +345,6 @@ exports.getConsultationRequest = asyncHandler(async (req, res) => {
   });
 });
 
-/**
- * @desc    Customer confirms a booking after receiving consultation/quote from staff
- * @route   POST /api/v1/bookings/:bookingId/confirm-consultation
- * @access  Private (Customer)
- */
 exports.customerConfirmBookingAfterConsultation = asyncHandler(
   async (req, res) => {
     const { bookingId } = req.params;
@@ -1075,11 +1066,6 @@ exports.getBookingWithTransactions = asyncHandler(async (req, res) => {
   }
 });
 
-/**
- * @desc    Get all bookings for the logged-in customer
- * @route   GET /api/v1/bookings/my-bookings
- * @access  Private (Customer)
- */
 exports.getCustomerBookings = asyncHandler(async (req, res) => {
   if (!req.user.customerId) {
     return res.status(401).json({
@@ -1301,3 +1287,34 @@ exports.saveConsultationServices = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+exports.deleteBookingOrder = asyncHandler(async (req, res) => {
+  const { bookingId } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+    return res
+      .status(400)
+      .json({ success: false, message: "Booking ID không hợp lệ." });
+  }
+
+  // Chỉ cho phép xóa booking đã huỷ và thuộc về user hiện tại
+  const bookingOrder = await BookingOrder.findOne({
+    _id: bookingId,
+    customer: req.user.customerId,
+    status: "cancelled",
+  });
+
+  if (!bookingOrder) {
+    return res.status(404).json({
+      success: false,
+      message: "Không tìm thấy booking đã huỷ hoặc bạn không có quyền.",
+    });
+  }
+
+  await bookingOrder.deleteOne();
+
+  res.status(200).json({
+    success: true,
+    message: "Booking đã được xóa thành công.",
+  });
+});
