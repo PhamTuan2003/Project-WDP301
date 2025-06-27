@@ -41,6 +41,7 @@ exports.getAllCompanies = async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 };
+
 exports.countCompanies = async (req, res) => {
     try {
         const count = await Company.countDocuments();
@@ -49,6 +50,7 @@ exports.countCompanies = async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 };
+
 exports.deleteCompany = async (req, res) => {
     try {
         const company = await Company.findByIdAndDelete(req.params.id);
@@ -64,6 +66,7 @@ exports.deleteCompany = async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 };
+
 exports.updateCompany = async (req, res) => {
     try {
         const { name, address, email, username } = req.body;
@@ -87,25 +90,30 @@ exports.updateCompany = async (req, res) => {
     }
 };
 
+// Doanh thu từng tháng, từng năm (cho lọc theo năm ở FE)
 exports.getMonthlyRevenue = async (req, res) => {
     try {
-        // Lấy tổng doanh thu từng tháng từ bảng bookingOrders
+        // Lấy tổng doanh thu từng tháng, từng năm từ bảng bookingOrders
         const result = await BookingOrder.aggregate([
             {
                 $group: {
-                    _id: { $month: "$bookingDate" },
+                    _id: {
+                        year: { $year: "$bookingDate" },
+                        month: { $month: "$bookingDate" }
+                    },
                     earnings: { $sum: "$amount" }
                 }
             },
-            { $sort: { "_id": 1 } }
+            { $sort: { "_id.year": -1, "_id.month": 1 } }
         ]);
-        // Chuyển sang dạng { month: 'January', earnings: ... }
+        // Chuyển sang dạng { year, month, earnings }
         const monthNames = [
             '', 'January', 'February', 'March', 'April', 'May', 'June',
             'July', 'August', 'September', 'October', 'November', 'December'
         ];
         const data = result.map(item => ({
-            month: monthNames[item._id],
+            year: item._id.year,
+            month: monthNames[item._id.month],
             earnings: item.earnings
         }));
         res.json(data);
