@@ -115,6 +115,45 @@ async function sendConsultationEmail(
   return transporter.sendMail(mailOptions);
 }
 
+// Hàm gửi email đăng ký tài khoản công ty
+async function sendCompanyRegisterEmail(to, companyName, username, password) {
+  if (!to || !/^[\w-.]+@([\w-]+\.)+[\w-]{2,}$/.test(to)) {
+    throw new Error("Email không hợp lệ hoặc không tìm thấy email.");
+  }
+  const subject = "Thông tin đăng ký tài khoản công ty";
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <head><meta charset="UTF-8" /><title>Đăng ký tài khoản công ty</title></head>
+      <body style="font-family: Arial, sans-serif; background: #f6f8fa; margin:0; padding:0;">
+        <table width="100%" bgcolor="#f6f8fa" cellpadding="0" cellspacing="0"><tr><td>
+          <table align="center" width="600" style="background: #fff; border-radius: 10px; margin: 40px auto; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+            <tr><td style="background: #1976d2; color: #fff; padding: 24px 32px; border-radius: 10px 10px 0 0; text-align: center;"><h2 style="margin: 0;">ĐĂNG KÝ TÀI KHOẢN CÔNG TY THÀNH CÔNG</h2></td></tr>
+            <tr><td style="padding: 32px;">
+              <p>Xin chào <b>${companyName}</b>,</p>
+              <p>Tài khoản công ty của bạn đã được tạo thành công trên hệ thống.</p>
+              <table style="width:100%; margin: 24px 0; background: #e3f2fd; border-radius: 8px;"><tr><td style="padding: 12px 16px;">
+                <b>Tên đăng nhập:</b> <span style="color:#1976d2;">${username}</span><br/>
+                <b>Mật khẩu:</b> <span style="color:#1976d2;">${password}</span>
+              </td></tr></table>
+              <p>Vui lòng đổi mật khẩu sau khi đăng nhập lần đầu.</p>
+              <p style="margin-top: 32px;">Trân trọng,<br/>Đội ngũ WDP Yacht</p>
+            </td></tr>
+            <tr><td style="background: #e3f2fd; color: #888; padding: 16px 32px; border-radius: 0 0 10px 10px; text-align: center; font-size: 13px;">© 2024 WDP Yacht. All rights reserved.</td></tr>
+          </table>
+        </td></tr></table>
+      </body>
+    </html>
+  `;
+  const mailOptions = {
+    from: process.env.EMAIL_USER,
+    to,
+    subject,
+    html,
+  };
+  return transporter.sendMail(mailOptions);
+}
+
 // Hàm test gửi email đơn giản
 async function testSendMail(to) {
   if (!to || !/^[\w-.]+@([\w-]+\.)+[\w-]{2,}$/.test(to)) {
@@ -134,4 +173,5 @@ module.exports = {
   sendBookingConfirmationEmail,
   sendConsultationEmail,
   testSendMail,
+  sendCompanyRegisterEmail,
 };
