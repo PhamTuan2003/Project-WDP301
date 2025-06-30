@@ -14,9 +14,10 @@ const {
   getConsultationRequest,
   updateBookingOrConsultationRequest,
   cancelConsultationRequest,
+  deleteBookingOrder,
 } = bookingController;
-const { veryfiToken } = require("../middleware/authMiddleware"); // Assuming you have this
-const { sendBookingConfirmationEmail, testSendMail } = require("../utils/sendMail");
+const { veryfiToken } = require("../middleware/authMiddleware");
+const { testSendMail } = require("../utils/sendMail");
 
 // ==================== BOOKING CREATION & CONSULTATION ====================
 router.post("/request", veryfiToken, createBookingOrConsultationRequest);
@@ -25,20 +26,11 @@ router.post("/:bookingId/confirm-consultation", veryfiToken, customerConfirmBook
 router.get("/consultation", veryfiToken, getConsultationRequest);
 router.delete("/consultation/:bookingId", veryfiToken, cancelConsultationRequest);
 router.get("/my-bookings", veryfiToken, getCustomerBookings);
-// Lấy chi tiết một booking của khách hàng đang đăng nhập
 router.get("/:bookingId/my-detail", veryfiToken, getCustomerBookingDetail);
-
-// ==================== CUSTOMER: CANCEL BOOKING ====================
-// Khách hàng hủy booking của chính mình
 router.put("/:bookingId/cancel", veryfiToken, customerCancelBooking);
-
-// ==================== UTILITY / RELATED INFO (Có thể cần cho KH) ====================
-// Lấy danh sách phòng (chưa có logic hoàn chỉnh trong controller) - có thể không cần veryfiToken nếu thông tin phòng là public
-router.get("/available-rooms", getRooms); // Đổi tên route cho rõ hơn
-
-// Khách hàng cập nhật thông tin cá nhân của họ
+router.get("/available-rooms", getRooms);
 router.put("/customer/my-info", veryfiToken, updateCustomerInfo);
-
+router.delete("/:bookingId", veryfiToken, deleteBookingOrder);
 // Route test gửi email
 router.get("/test-send-mail", async (req, res) => {
   const { to } = req.query;
@@ -49,5 +41,12 @@ router.get("/test-send-mail", async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 });
+
+// Thêm route lưu dịch vụ tư vấn vào consultationData.requestServices
+router.post(
+  "/consultation-services",
+  veryfiToken,
+  bookingController.saveConsultationServices
+);
 
 module.exports = router;

@@ -1,24 +1,12 @@
-const {
-  Company,
-  BookingOrder,
-  BookingService,
-  YachtSchema,
-  YachtType,
-  Location,
-  Service,
-  YachtService,
-  Schedule,
-  YachtSchedule,
-  RoomType,
-  RoomSchema,
-} = require("../model");
-const cloudinary = require("../utils/configClound");
-const ExcelJS = require("exceljs");
+const { Company } = require("../model");
 
 //lấy danh sách công ty du thuyền
 const getAllCompany = async (req, res) => {
   try {
-    const companies = await Company.find().populate("accountId", "-_id username roles status").where("exist").equals(1); // Chỉ lấy company có exist = 1
+    const companies = await Company.find()
+      .populate("accountId", "-_id username roles status")
+      .where("exist")
+      .equals(1); // Chỉ lấy company có exist = 1
 
     res.status(200).json({
       success: true,
@@ -26,7 +14,6 @@ const getAllCompany = async (req, res) => {
       data: companies,
     });
   } catch (error) {
-    console.error("Error getting companies:", error);
     res.status(500).json({
       success: false,
       message: "Đã xảy ra lỗi khi lấy danh sách công ty.",

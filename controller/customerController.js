@@ -52,7 +52,6 @@ const register = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Đăng ký bị lỗi:", error);
     res.status(500).json({ message: "Lỗi server khi đăng ký, thử lại sau" });
   }
 };
@@ -109,7 +108,6 @@ const login = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Login error:", error);
     res.status(500).json({ message: "Lỗi server khi đăng nhập" });
   }
 };

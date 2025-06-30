@@ -10,8 +10,6 @@ const {
   Company,
   Service,
 } = require("../model");
-const yachtSchema = require("../model/yachtSchema");
-const cloudinary = require("../utils/configClound");
 
 // Hàm lấy tất cả du thuyền
 const getAllYacht = async (req, res) => {
@@ -73,18 +71,29 @@ const getServicesByYachtId = async (req, res) => {
   try {
     const yachtId = req.params.id;
     const services = await YachtService.find({ yachtId })
-      .populate({ path: "serviceId", select: "-_id serviceName price" })
-      .populate({ path: "yachtId", select: "-_id name" });
+      .populate({ path: "serviceId", select: "serviceName price" })
+      .populate({ path: "yachtId", select: "name" });
     if (!services || services.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Không tìm thấy dịch vụ cho du thuyền này",
       });
     }
+    // Map lại để trả về _id thực của service
+    const mapped = services.map((ys) => {
+      const s = ys.serviceId;
+      return {
+        _id: s._id,
+        serviceName: s.serviceName,
+        price: s.price,
+        yachtServiceId: ys._id,
+        yachtId: ys.yachtId?._id || ys.yachtId,
+      };
+    });
     res.status(200).json({
       success: true,
       message: "Lấy danh sách dịch vụ thành công",
-      data: services,
+      data: mapped,
     });
   } catch (error) {
     res.status(500).json({

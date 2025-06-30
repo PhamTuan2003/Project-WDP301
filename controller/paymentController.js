@@ -68,13 +68,17 @@ const createInvoiceForTransaction = async (transactionId, session) => {
       booking.consultationData.requestedRooms.length > 0
     ) {
       invoiceItems = booking.consultationData.requestedRooms.map((roomData) => {
+        const quantity = Number(
+          roomData.roomQuantity || roomData.quantity || 1
+        );
+        const price = Number(roomData.roomPrice || roomData.price || 0);
         return {
           type: "room",
-          name: roomData.name || "Phòng đặt",
-          description: roomData.description || "",
-          quantity: roomData.quantity,
-          unitPrice: roomData.price / roomData.quantity,
-          totalPrice: roomData.price,
+          name: roomData.roomName || roomData.name || "Phòng đặt",
+          description: roomData.roomDescription || roomData.description || "",
+          quantity,
+          unitPrice: quantity > 0 ? price / quantity : price,
+          totalPrice: price,
         };
       });
     } else {
@@ -82,10 +86,39 @@ const createInvoiceForTransaction = async (transactionId, session) => {
         type: "service",
         name: `Dịch vụ đặt du thuyền ${booking.bookingCode}`,
         quantity: 1,
-        unitPrice: booking.amount,
-        totalPrice: booking.amount,
+        unitPrice: Number(booking.amount) || 0,
+        totalPrice: Number(booking.amount) || 0,
       });
     }
+
+    // === THÊM DỊCH VỤ ĐÃ CHỌN ===
+    if (
+      booking.consultationData &&
+      booking.consultationData.requestServices &&
+      booking.consultationData.requestServices.length > 0
+    ) {
+      const serviceItems = booking.consultationData.requestServices.map(
+        (service) => ({
+          type: "service",
+          name: service.serviceName || "Dịch vụ bổ sung",
+          description: "",
+          quantity: Number(service.serviceQuantity) || 1,
+          unitPrice: Number(service.servicePrice) || 0,
+          totalPrice:
+            (Number(service.serviceQuantity) || 1) *
+            (Number(service.servicePrice) || 0),
+        })
+      );
+      invoiceItems = invoiceItems.concat(serviceItems);
+    }
+
+    // Đảm bảo các trường số không bị NaN
+    invoiceItems = invoiceItems.map((item) => ({
+      ...item,
+      quantity: Number(item.quantity) || 1,
+      unitPrice: Number(item.unitPrice) || 0,
+      totalPrice: Number(item.totalPrice) || 0,
+    }));
 
     const newInvoice = new Invoice({
       bookingId: booking._id,
@@ -186,9 +219,9 @@ const processSuccessfulPayment = async (transaction, session) => {
         (roomData) => {
           const newBookingRoom = new BookingRoom({
             bookingId: booking._id,
-            roomId: roomData.id, // Đây phải là ObjectId của Room thực tế
-            quantity: roomData.quantity,
-            price: roomData.price, // Tổng giá cho roomData này
+            roomId: roomData.roomId || roomData.id,
+            quantity: roomData.roomQuantity || roomData.quantity,
+            price: roomData.roomPrice || roomData.price,
           });
           return newBookingRoom.save({ session });
         }
