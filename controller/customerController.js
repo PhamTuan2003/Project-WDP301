@@ -59,7 +59,6 @@ const register = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Đăng ký bị lỗi:", error);
     res.status(500).json({ message: "Lỗi server khi đăng ký, thử lại sau" });
   }
 };
@@ -97,7 +96,7 @@ const login = async (req, res) => {
     }
 
     const token = jwt.sign(
-      { _id: account._id, role: account.roles },
+      { _id: account._id, role: account.roles, customerId: customer._id },
       process.env.JWT_SECRET,
       {
         expiresIn: "7d",
@@ -118,7 +117,6 @@ const login = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Login error:", error);
     res.status(500).json({ message: "Lỗi server khi đăng nhập" });
   }
 };
