@@ -22,7 +22,10 @@ app.use(json());
 app.use(urlencoded({ extended: true }));
 app.use(morgan('dev'));
 
-// ROUTES
+// Phục vụ file tĩnh từ thư mục uploads
+app.use("/uploads", express.static("uploads"));
+
+// ACCOUNTS ROUTES
 app.use("/api/v1/accounts", require("./routers/accountRouter"));
 app.use("/api/v1/customers", require("./routers/customerRouter"));
 app.use("/api/v1/companies", require("./routers/companyRouter"));
