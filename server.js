@@ -44,8 +44,7 @@ app.use("/api/v1/payments", require("./routers/paymentRouter"));
 app.use("/api/v1/invoices", require("./routers/invoiceRouter"));
 app.use("/api/v1/feedback", require("./routers/feedbackRouter"));
 app.use("/api/v1/services", require("./routers/serviceRouter"));
-app.use("/api/v1/account-companies", require("./routers/accountCompanyRouter"));
-app.use("/api/v1/count-companies", require("./routers/accountCompanyRouter"));
+app.use("/api/v1/companies", require("./routers/companyRouter"));
 app.use("/admin", require("./routers/adminRouter"));
 
 // Custom router từ file index.js

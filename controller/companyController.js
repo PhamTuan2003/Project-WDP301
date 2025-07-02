@@ -1,12 +1,93 @@
-const { Company } = require("../model");
+const { Company, Account, BookingOrder, YachtSchema, Schedule, BookingService } = require("../model");
+const { sendCompanyRegisterEmail } = require('../utils/sendMail');
+const ExcelJS = require("exceljs");
 
-//lấy danh sách công ty du thuyền
+// ========== CRUD Company ==========
+
+// Tạo công ty mới + account đi kèm
+const createCompany = async (req, res) => {
+  try {
+    const { username, password, name, address, email } = req.body;
+
+    const account = new Account({
+      username,
+      password,
+      roles: "COMPANY",
+      status: 1
+    });
+    await account.save();
+
+    const company = new Company({
+      name,
+      address,
+      email,
+      accountId: account._id
+    });
+    await company.save();
+
+    await sendCompanyRegisterEmail(email, name, username, password);
+
+    res.status(201).json(company);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+};
+
+// Cập nhật thông tin công ty
+const updateCompany = async (req, res) => {
+  try {
+    const { name, address, email, username } = req.body;
+    const company = await Company.findById(req.params.id);
+    if (!company) return res.status(404).json({ error: 'Company not found' });
+
+    company.name = name;
+    company.address = address;
+    company.email = email;
+    await company.save();
+
+    if (username && company.accountId) {
+      await Account.findByIdAndUpdate(company.accountId, { username });
+    }
+
+    res.json({ message: 'Updated successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Xóa công ty + account liên kết
+const deleteCompany = async (req, res) => {
+  try {
+    const company = await Company.findByIdAndDelete(req.params.id);
+    if (!company) return res.status(404).json({ error: 'Company not found' });
+
+    if (company.accountId) {
+      await Account.findByIdAndDelete(company.accountId);
+    }
+
+    res.json({ message: 'Deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Lấy tất cả công ty (không filter)
+const getAllCompanies = async (req, res) => {
+  try {
+    const companies = await Company.find().populate('accountId');
+    res.json(companies);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Lấy các công ty có `exist = 1`
 const getAllCompany = async (req, res) => {
   try {
     const companies = await Company.find()
       .populate("accountId", "-_id username roles status")
       .where("exist")
-      .equals(1); // Chỉ lấy company có exist = 1
+      .equals(1);
 
     res.status(200).json({
       success: true,
@@ -21,24 +102,33 @@ const getAllCompany = async (req, res) => {
   }
 };
 
+// Đếm số công ty
+const countCompanies = async (req, res) => {
+  try {
+    const count = await Company.countDocuments();
+    res.json({ count });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// ========== DOANH THU ==========
+
+// Doanh thu theo tháng/năm từ bookingOrder
 const getRevenueBooking = async (req, res) => {
   try {
     const { idCompany, month, year } = req.query;
-
     const now = new Date();
-    const selectedMonth = month || (now.getMonth() + 1).toString(); // JS month is 0-based
+    const selectedMonth = month || (now.getMonth() + 1).toString();
     const selectedYear = year || now.getFullYear().toString();
 
     const startDate = new Date(`${selectedYear}-${selectedMonth}-01`);
     const endDate = new Date(startDate);
-    endDate.setMonth(endDate.getMonth() + 1); // kết thúc vào đầu tháng sau
+    endDate.setMonth(endDate.getMonth() + 1);
 
     const bookings = await BookingOrder.find({
       companyId: idCompany,
-      createdAt: {
-        $gte: startDate,
-        $lt: endDate,
-      },
+      createdAt: { $gte: startDate, $lt: endDate },
     });
 
     const total = bookings.reduce((sum, order) => sum + (order.amount || 0), 0);
@@ -50,6 +140,7 @@ const getRevenueBooking = async (req, res) => {
   }
 };
 
+// Doanh thu từ dịch vụ
 const getRevenueService = async (req, res) => {
   try {
     const { idCompany, month, year } = req.query;
@@ -61,30 +152,24 @@ const getRevenueService = async (req, res) => {
     const startDate = new Date(selectedYear, selectedMonth - 1, 1);
     const endDate = new Date(selectedYear, selectedMonth, 1);
 
-    // Step 1: Tìm các yacht thuộc company
     const yachts = await YachtSchema.find({ IdCompanys: idCompany }).select("_id");
     const yachtIds = yachts.map((y) => y._id);
 
-    // Step 2: Tìm schedule của các yacht đó
     const schedules = await Schedule.find({
       yachtId: { $in: yachtIds },
       startDate: { $gte: startDate, $lt: endDate },
     }).select("_id");
     const scheduleIds = schedules.map((s) => s._id);
 
-    // Step 3: Tìm các bookingOrder có scheduleId
     const bookingOrders = await BookingOrder.find({
       scheduleId: { $in: scheduleIds },
     }).select("_id");
-
     const bookingIds = bookingOrders.map((b) => b._id);
 
-    // Step 4: Tìm các bookingService liên quan
     const bookingServices = await BookingService.find({
       bookingId: { $in: bookingIds },
     }).populate("serviceId");
 
-    // Step 5: Tính tổng giá dịch vụ
     let total = 0;
     for (const bs of bookingServices) {
       if (bs.serviceId?.price) {
@@ -99,19 +184,50 @@ const getRevenueService = async (req, res) => {
   }
 };
 
+// Doanh thu tổng hợp theo từng tháng + năm (FE dùng để vẽ biểu đồ)
+const getMonthlyRevenue = async (req, res) => {
+  try {
+    const result = await BookingOrder.aggregate([
+      {
+        $group: {
+          _id: {
+            year: { $year: "$bookingDate" },
+            month: { $month: "$bookingDate" }
+          },
+          earnings: { $sum: "$amount" }
+        }
+      },
+      { $sort: { "_id.year": -1, "_id.month": 1 } }
+    ]);
+
+    const monthNames = [
+      '', 'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+
+    const data = result.map(item => ({
+      year: item._id.year,
+      month: monthNames[item._id.month],
+      earnings: item.earnings
+    }));
+
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// ========== EXPORT BOOKING EXCEL ==========
+
 async function getBookings(idCompany, month, year) {
-  // Xác định tháng và năm để lọc
   const m = month || new Date().getMonth() + 1;
   const y = year || new Date().getFullYear();
 
-  // Tạo ngày bắt đầu tháng
   const startDate = new Date(y, m - 1, 1);
-  // Ngày kết thúc là ngày đầu tháng kế tiếp
   const endDate = new Date(y, m, 1);
 
-  // Query Mongoose
   return BookingOrder.find({
-    IdCompanys: idCompany, // trường company trong BookingOrder (bạn sửa tên đúng nếu khác)
+    IdCompanys: idCompany,
     bookingDate: { $gte: startDate, $lt: endDate },
   })
     .populate("customerId")
@@ -124,18 +240,14 @@ const exportBooking = async (req, res) => {
     const { idCompany } = req.params;
     let { month, year } = req.query;
 
-    // Nếu cả month và year là empty string, gán undefined để hàm getBookings tự lấy hiện tại
     if (month === "") month = undefined;
     if (year === "") year = undefined;
 
-    // Lấy booking theo logic Java đã cho
     const bookingOrders = await getBookings(idCompany, month, year);
 
-    // Tạo workbook ExcelJS
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("Booking Orders");
 
-    // Header
     const headers = [
       "ID Booking",
       "Amount",
@@ -172,9 +284,7 @@ const exportBooking = async (req, res) => {
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename=Booking_Order_${month || new Date().getMonth() + 1}_${
-        year || new Date().getFullYear()
-      }.xlsx`
+      `attachment; filename=Booking_Order_${month || new Date().getMonth() + 1}_${year || new Date().getFullYear()}.xlsx`
     );
 
     await workbook.xlsx.write(res);
@@ -185,4 +295,15 @@ const exportBooking = async (req, res) => {
   }
 };
 
-module.exports = { getAllCompany, getRevenueBooking, getRevenueService, exportBooking };
+module.exports = {
+  getAllCompany,
+  createCompany,
+  getAllCompanies,
+  countCompanies,
+  deleteCompany,
+  updateCompany,
+  getRevenueBooking,
+  getRevenueService,
+  getMonthlyRevenue,
+  exportBooking,
+};
