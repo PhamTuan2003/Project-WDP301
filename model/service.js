@@ -7,4 +7,3 @@ const ServiceSchema = new Schema({
 });
 
 module.exports = mongoose.model("Service", ServiceSchema, "services");
-//done

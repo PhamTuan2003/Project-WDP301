@@ -10,29 +10,25 @@ const app = express();
 
 // Connect Database
 connectDB();
-
-// Middleware
+app.use(
+  cors({
+    origin: "http://localhost:3000",
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "Cache-Control",
+      "Pragma",
+    ],
+  })
+);
+app.use(express.json());
+app.use(json());
+app.use(urlencoded({ extended: true }));
+app.use(morgan("dev"));
 
 // Phục vụ file tĩnh từ thư mục uploads
 app.use("/uploads", express.static("uploads"));
-
-// Phục vụ file tĩnh từ thư mục uploads
-app.use("/uploads", express.static("uploads"));
-
-// ACCOUNTS ROUTES
-app.use("/api/v1/accounts", require("./routers/accountRouter"));
-app.use("/api/v1/customers", require("./routers/customerRouter"));
-app.use("/api/v1/companies", require("./routers/companyRouter"));
-app.use("/api/v1/yachts", require("./routers/yachtRouter"));
-app.use("/api/v1/yachtImages", require("./routers/yachtImageRouter"));
-app.use("/api/v1/rooms", require("./routers/roomRouter"));
-app.use("/api/v1/bookings", require("./routers/bookingRouter"));
-app.use("/api/v1/payments", require("./routers/paymentRouter"));
-app.use("/api/v1/invoices", require("./routers/invoiceRouter"));
-app.use("/api/v1/feedback", require("./routers/feedbackRouter"));
-app.use("/api/v1/services", require("./routers/serviceRouter"));
-app.use("/api/v1/companies", require("./routers/companyRouter"));
-app.use("/admin", require("./routers/adminRouter"));
 
 // Custom router từ file index.js
 router(app);

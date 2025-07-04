@@ -45,4 +45,3 @@ module.exports = {
   YachtService,
   YachtType,
 };
-//done
