@@ -41,6 +41,13 @@ const validatePaymentRequest = (req, res, next) => {
 // Helper function to create Invoice
 const createInvoiceForTransaction = async (transactionId, session) => {
   try {
+    // Kiểm tra nếu đã có invoice cho transaction này thì return luôn
+    const existingInvoice = await Invoice.findOne({
+      transactionId: transactionId,
+    }).session(session);
+    if (existingInvoice) {
+      return existingInvoice;
+    }
     const transaction = await Transaction.findById(transactionId)
       .populate({
         path: "bookingId",

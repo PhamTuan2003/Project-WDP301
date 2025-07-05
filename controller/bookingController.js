@@ -238,6 +238,22 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
     const newBookingOrder = new BookingOrder(newBookingOrderData);
     const savedBookingOrder = await newBookingOrder.save({ session });
 
+    // LƯU DỊCH VỤ VÀO BOOKING SERVICES NGAY KHI BOOKING (PENDING_PAYMENT)
+    if (
+      requestType === "pending_payment" &&
+      processedServices &&
+      processedServices.length > 0
+    ) {
+      const bookingServiceDocs = processedServices.map((service) => ({
+        bookingId: savedBookingOrder._id,
+        serviceId: service.serviceId,
+        price: service.servicePrice,
+        quantity: service.serviceQuantity,
+        serviceName: service.serviceName,
+      }));
+      await BookingService.insertMany(bookingServiceDocs, { session });
+    }
+
     // Gửi email xác nhận theo loại booking
     try {
       const checkInDateStr = new Date(
