@@ -27,3 +27,12 @@ module.exports = (app) => {
   app.use(api + "/yachtImages", yachtImageRouter);
   app.use("/admin", adminRouter);
 };
+
+module.exports = (app) => {
+    const api = "/api";
+    app.use(api + '/companies/yacht', yachtRouter)
+    app.use(api + '/rooms', roomRouter)
+    app.use(api + '/company', companyRouter)
+    app.use(api + '/companies', locationRouter)
+    app.use(api + '/companies', yachtTypeRouter)
+}
