@@ -10,6 +10,7 @@ const {
   getSchedulesByYacht,
   getYachtById,
   getServicesByYachtId,
+  getYachtsByCompanyId,
   // createYacht,
   // addServiceToYacht,
   // addScheduleToYacht,
@@ -19,17 +20,15 @@ router.get("/", getAllYacht);
 router.get("/services", getAllServices);
 router.get("/findboat", searchYachts);
 router.get("/findboat/:id", getYachtById);
+router.get("/:companyId", getYachtsByCompanyId);
 router.get("/:id/feedbacks", getFeedbacksByYacht);
 router.get("/:id/services", getServicesByYachtId);
 router.get("/:id/schedules", getSchedulesByYacht);
-<<<<<<< Updated upstream
 // router.post('/create', upload.single('image'), createYacht);
 // router.post('/add-service', addServiceToYacht);
 // router.post('/add-schedule', addScheduleToYacht);
-=======
 router.post('/insertYacht', upload.single('image'), createYacht);
 router.post('/add-service', addServiceToYacht);
 router.post('/add-schedule', addScheduleToYacht);
->>>>>>> Stashed changes
 
 module.exports = router;
