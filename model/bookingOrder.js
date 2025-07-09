@@ -24,7 +24,7 @@ const bookingOrderSchema = new mongoose.Schema(
 
     schedule: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Schedule",
+      ref: "YachtSchedule",
       default: null,
     },
 

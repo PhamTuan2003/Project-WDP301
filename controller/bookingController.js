@@ -197,7 +197,6 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
         roomMaxPeople: room.roomMaxPeople || room.max_people || 1,
         roomPrice: roomPrice,
         roomQuantity: roomQuantity,
-        roomBeds: room.roomBeds || room.beds,
         roomImage: room.roomImage || (room.images && room.images[0]) || "",
       };
     });
@@ -899,7 +898,6 @@ exports.updateBookingOrConsultationRequest = asyncHandler(async (req, res) => {
         roomArea: room.roomArea,
         roomAvatar: room.roomAvatar,
         roomMaxPeople: room.roomMaxPeople,
-        roomBeds: room.roomBeds,
         roomImage: room.roomImage,
       })
     );
@@ -1099,10 +1097,25 @@ exports.getCustomerBookings = asyncHandler(async (req, res) => {
     });
   }
 
-  const bookings = await BookingOrder.find({ customer: req.user.customerId })
+  let bookings = await BookingOrder.find({ customer: req.user.customerId })
     .populate("yacht", "name images location")
     .populate("schedule", "startDate endDate")
     .sort({ createdAt: -1 }); // Sắp xếp theo ngày tạo mới nhất
+
+  // Tính days/nights cho schedule
+  bookings = bookings.map((booking) => {
+    const obj = booking.toObject();
+    if (obj.schedule && obj.schedule.startDate && obj.schedule.endDate) {
+      const start = new Date(obj.schedule.startDate);
+      const end = new Date(obj.schedule.endDate);
+      const diffMs = end - start;
+      const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+      obj.schedule.days = diffDays;
+      obj.schedule.nights = diffDays > 0 ? diffDays - 1 : 0;
+      obj.schedule.displayText = `${obj.schedule.days} ngày ${obj.schedule.nights} đêm`;
+    }
+    return obj;
+  });
 
   res.status(200).json({
     success: true,
@@ -1125,7 +1138,7 @@ exports.getCustomerBookingDetail = asyncHandler(async (req, res) => {
       .json({ success: false, message: "Booking ID không hợp lệ." });
   }
 
-  const booking = await BookingOrder.findById(bookingId)
+  let booking = await BookingOrder.findById(bookingId)
     .populate("yacht", "name images location")
     .populate("schedule", "startDate endDate")
     .populate({ path: "customer", select: "fullName email phoneNumber" });
@@ -1154,11 +1167,27 @@ exports.getCustomerBookingDetail = asyncHandler(async (req, res) => {
     bookingId: booking._id,
   }).populate("serviceId");
 
+  // Tính days/nights cho schedule
+  let bookingObj = booking.toObject();
+  if (
+    bookingObj.schedule &&
+    bookingObj.schedule.startDate &&
+    bookingObj.schedule.endDate
+  ) {
+    const start = new Date(bookingObj.schedule.startDate);
+    const end = new Date(bookingObj.schedule.endDate);
+    const diffMs = end - start;
+    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+    bookingObj.schedule.days = diffDays;
+    bookingObj.schedule.nights = diffDays > 0 ? diffDays - 1 : 0;
+    bookingObj.schedule.displayText = `${bookingObj.schedule.days} ngày ${bookingObj.schedule.nights} đêm`;
+  }
+
   res.status(200).json({
     success: true,
     data: {
       booking: {
-        ...booking.toObject(),
+        ...bookingObj,
         adults: booking.adults,
         childrenUnder10: booking.childrenUnder10,
         childrenAbove10: booking.childrenAbove10,

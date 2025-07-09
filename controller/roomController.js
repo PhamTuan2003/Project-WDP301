@@ -22,7 +22,7 @@ const getRoomsWithTypes = async (req, res) => {
     // Find rooms and populate roomTypeId
     let rooms = await Room.find(query).populate({
       path: "roomTypeId",
-      select: "name price",
+      select: "type utility price",
     });
 
     // Filter out booked rooms if scheduleId is provided
@@ -42,6 +42,7 @@ const getRoomsWithTypes = async (req, res) => {
       area: room.area,
       avatar: room.avatar,
       max_people: room.max_people,
+      roomTypeId: room.roomTypeId,
       price: room.roomTypeId?.price || 0,
     }));
 
@@ -62,9 +63,10 @@ const getRoomsWithTypes = async (req, res) => {
 
 const createRoom = async (req, res) => {
   try {
-    const { name, description, area, roomTypeId, yachtId } = req.body;
+    const { name, description, area, roomTypeId, yachtId, max_people } =
+      req.body;
 
-    if (!name || !area || !roomTypeId || !yachtId) {
+    if (!name || !area || !roomTypeId || !yachtId || !max_people) {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
@@ -77,6 +79,7 @@ const createRoom = async (req, res) => {
       avatar,
       roomTypeId,
       yachtId,
+      max_people,
     });
 
     await room.save();
