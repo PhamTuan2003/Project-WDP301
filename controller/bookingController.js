@@ -128,6 +128,21 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
         message: "Không tìm thấy thông tin khách hàng.",
       });
     }
+    const existingBooking = await BookingOrder.findOne({
+      customer: req.user.customerId,
+      yacht: yachtId,
+      checkInDate: checkIn,
+      status: { $in: ["consultation_requested", "pending_payment"] },
+    }).session(session);
+
+    if (existingBooking) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        success: false,
+        message:
+          "Bạn đã có yêu cầu chưa hoàn thành với thuyền này cho ngày này. Vui lòng hoàn thành hoặc hủy yêu cầu cũ trước khi tạo mới.",
+      });
+    }
     const customerUpdates = {};
     if (fullName && customer.fullName !== fullName)
       customerUpdates.fullName = fullName;
@@ -302,6 +317,11 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
     });
   } catch (error) {
     await session.abortTransaction();
+    console.error(
+      "[ERROR][Booking] Lỗi server khi xử lý yêu cầu:",
+      error,
+      error.stack
+    );
     res.status(500).json({
       success: false,
       message: "Lỗi server khi xử lý yêu cầu.",
@@ -316,7 +336,7 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
 });
 
 exports.getConsultationRequest = asyncHandler(async (req, res) => {
-  const { yachtId } = req.query;
+  const { yachtId, checkInDate } = req.query;
   const customerId = req.user.customerId;
 
   if (!customerId || !yachtId) {
@@ -326,11 +346,18 @@ exports.getConsultationRequest = asyncHandler(async (req, res) => {
     });
   }
 
-  const consultation = await BookingOrder.findOne({
+  const query = {
     customer: customerId,
     yacht: yachtId,
     status: "consultation_requested",
-  }).lean();
+  };
+
+  // Nếu có checkInDate, thêm vào query để tìm chính xác
+  if (checkInDate) {
+    query.checkInDate = new Date(checkInDate);
+  }
+
+  const consultation = await BookingOrder.findOne(query).lean();
 
   if (!consultation) {
     return res.status(404).json({

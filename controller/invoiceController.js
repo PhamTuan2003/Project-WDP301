@@ -411,8 +411,8 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
         .text(
           `Tổng khách quy đổi: ${
             invoice.guestInfo.adults +
-            Math.ceil((invoice.guestInfo.childrenAbove10 || 0) / 2)
-          } (2 trẻ em từ 10 tuổi tính là 1 người lớn, trẻ em dưới 10 tuổi không tính)`,
+            Math.floor((invoice.guestInfo.childrenAbove10 || 0) / 2)
+          } (2 trẻ em từ 10 tuổi = 1 người lớn, trẻ em dưới 10 tuổi không tính)`,
           370,
           y,
           { width: 180 }
