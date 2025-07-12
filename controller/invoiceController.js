@@ -8,11 +8,7 @@ const Transaction = require("../model/transaction");
 // Lấy invoice theo transaction ID (Mongoose ObjectId)
 const getInvoiceByTransaction = asyncHandler(async (req, res) => {
   const { transactionId } = req.params;
-
-  console.log("[getInvoiceByTransaction] transactionId param:", transactionId);
-
   if (!mongoose.Types.ObjectId.isValid(transactionId)) {
-    console.log("[getInvoiceByTransaction] Invalid ObjectId:", transactionId);
     return res
       .status(400)
       .json({ success: false, message: "Transaction ID không hợp lệ." });
@@ -26,8 +22,20 @@ const getInvoiceByTransaction = asyncHandler(async (req, res) => {
           "bookingCode confirmationCode customer yacht schedule checkInDate customerInfo",
         populate: [
           { path: "customer", select: "fullName email phoneNumber address" },
-          { path: "yacht", select: "name location" },
-          { path: "schedule", select: "startDate endDate" },
+          {
+            path: "yacht",
+            select: "name locationId",
+            populate: { path: "locationId", select: "name" },
+          },
+          // Nếu schedule là YachtSchedule, cần populate scheduleId
+          {
+            path: "schedule",
+            select: "scheduleId",
+            populate: {
+              path: "scheduleId",
+              select: "startDate endDate displayText",
+            },
+          },
         ],
       })
       .populate(
@@ -36,16 +44,9 @@ const getInvoiceByTransaction = asyncHandler(async (req, res) => {
       );
 
     if (!invoice) {
-      console.log(
-        "[getInvoiceByTransaction] Invoice NOT FOUND for transactionId:",
-        transactionId
-      );
       // Thử log tất cả invoice có transactionId là gì
       const allInvoices = await Invoice.find({}, "_id transactionId");
-      console.log(
-        "[getInvoiceByTransaction] All invoice transactionIds:",
-        allInvoices.map((i) => i.transactionId)
-      );
+
       return res.status(404).json({
         success: false,
         message: "Invoice không tồn tại cho transaction ID này.",
@@ -115,8 +116,20 @@ const getInvoiceById = asyncHandler(async (req, res) => {
           "bookingCode confirmationCode customer yacht schedule checkInDate customerInfo",
         populate: [
           { path: "customer", select: "fullName email phoneNumber address" },
-          { path: "yacht", select: "name location" },
-          { path: "schedule", select: "startDate endDate" },
+          {
+            path: "yacht",
+            select: "name locationId",
+            populate: { path: "locationId", select: "name" },
+          },
+          // Nếu schedule là YachtSchedule, cần populate scheduleId
+          {
+            path: "schedule",
+            select: "scheduleId",
+            populate: {
+              path: "scheduleId",
+              select: "startDate endDate displayText",
+            },
+          },
         ],
       })
       .populate(
@@ -191,8 +204,19 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
           "bookingCode confirmationCode customer yacht schedule checkInDate customerInfo",
         populate: [
           { path: "customer", select: "fullName email phoneNumber address" },
-          { path: "yacht", select: "name location" },
-          { path: "schedule", select: "startDate endDate" },
+          {
+            path: "yacht",
+            select: "name locationId",
+            populate: { path: "locationId", select: "name" },
+          },
+          {
+            path: "schedule",
+            select: "scheduleId",
+            populate: {
+              path: "scheduleId",
+              select: "startDate endDate displayText",
+            },
+          },
         ],
       })
       .populate(
@@ -347,8 +371,8 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
       .text("Thông tin người mua", 330, 155);
     doc.font("Archivo").fontSize(10).fillColor("#000");
     doc.text(`Họ và tên: ${invoice.customerInfo?.fullName || "N/A"}`, 330, 170);
-    if (invoice.customerInfo?.address)
-      doc.text(`Địa chỉ: ${invoice.customerInfo.address}`, 330, 185);
+    if (invoice.bookingId.customer.address)
+      doc.text(`Địa chỉ: ${invoice.bookingId.customer.address}`, 330, 185);
     doc.text(
       `Số điện thoại: ${invoice.customerInfo?.phoneNumber || "N/A"}`,
       330,
@@ -360,7 +384,7 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
     // THÔNG TIN DỊCH VỤ (box xanh nhạt)
     let yService = 270;
     doc
-      .roundedRect(40, yService, 515, 70, 10)
+      .roundedRect(40, yService, 515, 80, 10)
       .fillAndStroke("#f0fdfa", "#5eead4");
     doc
       .font("Archivo-Bold")
@@ -373,8 +397,59 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
       doc.text(`Du thuyền: ${invoice.yachtInfo.name}`, 55, y);
     if (invoice.yachtInfo?.location)
       doc.text(`Địa điểm: ${invoice.yachtInfo.location}`, 200, y);
-    if (invoice.yachtInfo?.scheduleInfo)
-      doc.text(`Lịch trình: ${invoice.yachtInfo.scheduleInfo}`, 370, y);
+
+    y += 15;
+    // Hiển thị lịch trình từ nhiều nguồn khác nhau (PDF)
+    let scheduleText = "-";
+    if (
+      invoice.bookingId?.schedule &&
+      invoice.bookingId.schedule.scheduleId &&
+      invoice.bookingId.schedule.scheduleId.startDate &&
+      invoice.bookingId.schedule.scheduleId.endDate
+    ) {
+      // booking.schedule là YachtSchedule, lấy ngày từ scheduleId
+      const start = new Date(invoice.bookingId.schedule.scheduleId.startDate);
+      const end = new Date(invoice.bookingId.schedule.scheduleId.endDate);
+      if (!isNaN(start) && !isNaN(end)) {
+        const msPerDay = 24 * 60 * 60 * 1000;
+        const days = Math.round((end - start) / msPerDay) + 1;
+        const nights = days - 1;
+        scheduleText = `${days} ngày ${nights} đêm (từ ${start.toLocaleDateString(
+          "vi-VN"
+        )} đến ${end.toLocaleDateString("vi-VN")})`;
+      }
+    } else if (
+      invoice.bookingId?.schedule &&
+      invoice.bookingId.schedule.startDate &&
+      invoice.bookingId.schedule.endDate
+    ) {
+      // booking.schedule là Schedule
+      const start = new Date(invoice.bookingId.schedule.startDate);
+      const end = new Date(invoice.bookingId.schedule.endDate);
+      if (!isNaN(start) && !isNaN(end)) {
+        const msPerDay = 24 * 60 * 60 * 1000;
+        const days = Math.round((end - start) / msPerDay) + 1;
+        const nights = days - 1;
+        scheduleText = `${days} ngày ${nights} đêm (từ ${start.toLocaleDateString(
+          "vi-VN"
+        )} đến ${end.toLocaleDateString("vi-VN")})`;
+      }
+    } else if (
+      invoice.bookingId?.schedule &&
+      invoice.bookingId.schedule.scheduleId &&
+      invoice.bookingId.schedule.scheduleId.displayText
+    ) {
+      scheduleText = invoice.bookingId.schedule.scheduleId.displayText;
+    } else if (
+      invoice.bookingId?.schedule &&
+      invoice.bookingId.schedule.displayText
+    ) {
+      scheduleText = invoice.bookingId.schedule.displayText;
+    }
+    if (scheduleText) {
+      doc.text(`Lịch trình: ${scheduleText}`, 55, y);
+    }
+
     y += 15;
     if (invoice.yachtInfo?.checkInDate)
       doc.text(
@@ -483,30 +558,21 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
       yTotal += 15;
     }
     doc.fillColor("#000").text("Tiền chưa có thuế VAT", 290, yTotal);
-    doc.text(
-      (
-        invoice.financials?.subtotal - invoice.financials?.totalDiscount
-      ).toLocaleString("vi-VN"),
-      500,
-      yTotal
-    );
+    const amountBeforeTax =
+      (invoice.financials?.subtotal || 0) -
+      (invoice.financials?.totalDiscount || 0);
+    doc.text(amountBeforeTax.toLocaleString("vi-VN"), 500, yTotal);
     yTotal += 15;
     doc.fillColor("#f59e42").text("Thuế VAT (5%)", 290, yTotal);
-    doc.text(
-      invoice.financials?.totalTax?.toLocaleString("vi-VN") || "0",
-      535,
-      yTotal
-    );
+    const tax = amountBeforeTax * 0.05;
+    doc.text(tax.toLocaleString("vi-VN"), 510, yTotal);
     yTotal += 15;
     doc
       .font("Archivo-Bold")
       .fillColor("#2563eb")
       .text("TỔNG TIỀN THANH TOÁN", 290, yTotal);
-    doc.text(
-      invoice.financials?.total?.toLocaleString("vi-VN") || "0",
-      500,
-      yTotal
-    );
+    const total = amountBeforeTax + tax;
+    doc.text(total.toLocaleString("vi-VN"), 500, yTotal);
     yTotal += 18;
     doc.font("Archivo").fillColor("#22c55e").text("Đã thanh toán", 290, yTotal);
     doc.text(
@@ -515,13 +581,10 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
       yTotal
     );
     yTotal += 15;
-    if (invoice.financials?.remainingAmount > 0) {
+    const remainingAmount = total - (invoice.financials?.paidAmount || 0);
+    if (remainingAmount > 0) {
       doc.fillColor("#f59e42").text("Còn lại", 290, yTotal);
-      doc.text(
-        invoice.financials?.remainingAmount?.toLocaleString("vi-VN") || "0",
-        500,
-        yTotal
-      );
+      doc.text(remainingAmount.toLocaleString("vi-VN"), 500, yTotal);
       doc.fillColor("#000");
     }
 
@@ -743,8 +806,12 @@ const createInvoiceManual = asyncHandler(async (req, res) => {
         path: "bookingId",
         populate: [
           { path: "customer" },
-          { path: "yacht", select: "name location" },
-          { path: "schedule", select: "startDate endDate" },
+          {
+            path: "yacht",
+            select: "name locationId",
+            populate: { path: "locationId", select: "name" },
+          },
+          { path: "schedule", select: "startDate endDate displayText" },
         ],
       })
       .session(session);
@@ -782,6 +849,50 @@ const createInvoiceManual = asyncHandler(async (req, res) => {
         totalPrice: booking.amount,
       });
     }
+    // Tạo scheduleInfo đúng chuẩn
+    let scheduleInfo = "-";
+    if (
+      booking.schedule &&
+      booking.schedule.scheduleId &&
+      booking.schedule.scheduleId.startDate &&
+      booking.schedule.scheduleId.endDate
+    ) {
+      // booking.schedule là YachtSchedule, lấy ngày từ scheduleId
+      const start = new Date(booking.schedule.scheduleId.startDate);
+      const end = new Date(booking.schedule.scheduleId.endDate);
+      if (!isNaN(start) && !isNaN(end)) {
+        const msPerDay = 24 * 60 * 60 * 1000;
+        const days = Math.round((end - start) / msPerDay) + 1;
+        const nights = days - 1;
+        scheduleInfo = `${days} ngày ${nights} đêm (từ ${start.toLocaleDateString(
+          "vi-VN"
+        )} đến ${end.toLocaleDateString("vi-VN")})`;
+      }
+    } else if (
+      booking.schedule &&
+      booking.schedule.startDate &&
+      booking.schedule.endDate
+    ) {
+      // booking.schedule là Schedule
+      const start = new Date(booking.schedule.startDate);
+      const end = new Date(booking.schedule.endDate);
+      if (!isNaN(start) && !isNaN(end)) {
+        const msPerDay = 24 * 60 * 60 * 1000;
+        const days = Math.round((end - start) / msPerDay) + 1;
+        const nights = days - 1;
+        scheduleInfo = `${days} ngày ${nights} đêm (từ ${start.toLocaleDateString(
+          "vi-VN"
+        )} đến ${end.toLocaleDateString("vi-VN")})`;
+      }
+    } else if (
+      booking.schedule &&
+      booking.schedule.scheduleId &&
+      booking.schedule.scheduleId.displayText
+    ) {
+      scheduleInfo = booking.schedule.scheduleId.displayText;
+    } else if (booking.schedule && booking.schedule.displayText) {
+      scheduleInfo = booking.schedule.displayText;
+    }
     const newInvoice = new Invoice({
       bookingId: booking._id,
       transactionId: transaction._id,
@@ -790,28 +901,42 @@ const createInvoiceManual = asyncHandler(async (req, res) => {
         fullName: booking.customerInfo?.fullName || customer.fullName,
         email: booking.customerInfo?.email || customer.email,
         phoneNumber: booking.customerInfo?.phoneNumber || customer.phoneNumber,
-        address: booking.customerInfo?.address || customer.address || "",
+        address:
+          booking.customerInfo?.address || booking.customer.address || "",
       },
       yachtInfo: {
         yachtId: booking.yacht?._id,
         name: booking.yacht?.name,
-        location: booking.yacht?.location,
-        scheduleInfo: booking.schedule
-          ? `${booking.schedule.startDate?.toLocaleDateString()} - ${booking.schedule.endDate?.toLocaleDateString()}`
-          : "",
+        location:
+          booking.yacht?.locationId?.name || booking.yacht?.locationId || "-",
+        scheduleInfo: scheduleInfo,
         checkInDate: booking.checkInDate,
       },
       items: invoiceItems,
       financials: {
         subtotal: invoiceItems.reduce((sum, item) => sum + item.totalPrice, 0),
-        totalTax: 0,
         totalDiscount: 0,
-        total: invoiceItems.reduce((sum, item) => sum + item.totalPrice, 0),
+        totalTax: 0,
+        total: 0,
         paidAmount: transaction.amount,
         remainingAmount: 0,
       },
       issueDate: new Date(),
     });
+
+    // Tính toán VAT và tổng tiền
+    const subtotal = newInvoice.financials.subtotal;
+    const discount = newInvoice.financials.totalDiscount;
+    const amountBeforeTax = subtotal - discount;
+    const tax = amountBeforeTax * 0.05; // VAT 5%
+    const total = amountBeforeTax + tax;
+    const remainingAmount = total - transaction.amount;
+
+    // Cập nhật financials với các giá trị đã tính toán
+    newInvoice.financials.totalTax = tax;
+    newInvoice.financials.total = total;
+    newInvoice.financials.remainingAmount = remainingAmount;
+
     const savedInvoice = await newInvoice.save({ session });
     await session.commitTransaction();
     session.endSession();
