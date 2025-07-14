@@ -459,6 +459,38 @@ const getYachtsByCompanyId = async (req, res) => {
   }
 };
 
+// API cập nhật lịch trình của du thuyền
+const updateScheduleToYacht = async (req, res) => {
+  try {
+    const { yachtId, scheduleId } = req.params;
+    const { startDate, endDate } = req.body;
+
+    // Tìm YachtSchedule
+    const yachtSchedule = await YachtSchedule.findOne({ yachtId, scheduleId });
+    if (!yachtSchedule) {
+      return res.status(404).json({ message: 'Không tìm thấy lịch trình này của du thuyền' });
+    }
+
+    // Update schedule
+    const schedule = await Schedule.findByIdAndUpdate(
+      scheduleId,
+      { startDate, endDate },
+      { new: true, runValidators: true }
+    );
+    if (!schedule) {
+      return res.status(404).json({ message: 'Không tìm thấy schedule' });
+    }
+
+    return res.status(200).json({
+      message: 'Cập nhật lịch trình thành công',
+      schedule
+    });
+  } catch (error) {
+    console.error('Error updating schedule:', error);
+    return res.status(500).json({ message: 'Lỗi server khi cập nhật lịch trình' });
+  }
+};
+
 module.exports = {
   getAllYacht,
   getAllServices,
@@ -472,4 +504,5 @@ module.exports = {
   addScheduleToYacht,
   updateYacht,
   getYachtsByCompanyId,
+  updateScheduleToYacht,
 };

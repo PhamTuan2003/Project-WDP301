@@ -11,7 +11,8 @@ const {
   getRevenueBooking,
   getRevenueService,
   getMonthlyRevenue,
-  exportBooking
+  exportBooking,
+  getInfoCompany,
 } = require("../controller/companyController");
 
 // CRUD COMPANY
@@ -29,5 +30,7 @@ router.get("/revenue/monthly", getMonthlyRevenue); // Tổng hợp từng tháng
 
 // EXPORT FILE
 router.get("/export/:idCompany", exportBooking); // Xuất file Excel
+
+router.get("/info/:id", getInfoCompany); // Lấy thông tin công ty theo ID
 
 module.exports = router;

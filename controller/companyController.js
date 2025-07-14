@@ -295,6 +295,30 @@ const exportBooking = async (req, res) => {
   }
 };
 
+const getInfoCompany = async (req, res) => {
+  try {
+    const company = await Company.findById(req.params.id)
+      .populate("accountId", "_id username roles status")
+      .where("exist")
+      .equals(1);
+
+    if (!company) {
+      return res.status(404).json({ success: false, message: "Company not found." });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Company information retrieved successfully.",
+      data: company,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "An error occurred while retrieving company information.",
+    });
+  }
+};
+
 module.exports = {
   getAllCompany,
   createCompany,
@@ -306,4 +330,5 @@ module.exports = {
   getRevenueService,
   getMonthlyRevenue,
   exportBooking,
+  getInfoCompany
 };

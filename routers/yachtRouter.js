@@ -11,6 +11,7 @@ const {
   getYachtById,
   getServicesByYachtId,
   getYachtsByCompanyId,
+  updateScheduleToYacht,
   // createYacht,
   // addServiceToYacht,
   // addScheduleToYacht,
@@ -30,5 +31,8 @@ router.get("/:id/schedules", getSchedulesByYacht);
 router.post('/insertYacht', upload.single('image'), createYacht);
 router.post('/add-service', addServiceToYacht);
 router.post('/add-schedule', addScheduleToYacht);
+
+// API cập nhật lịch trình của du thuyền
+router.put("/updateSchedule/:yachtId/:scheduleId", updateScheduleToYacht);
 
 module.exports = router;
