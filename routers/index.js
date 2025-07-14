@@ -10,6 +10,7 @@ const feedbackRouter = require("./feedbackRouter");
 const serviceRouter = require("./serviceRouter");
 const adminRouter = require("./adminRouter");
 const yachtImageRouter = require("./yachtImageRouter");
+const accountCompanyRouter = require("./accountCompanyRouter");
 
 module.exports = (app) => {
   const api = "/api/v1";
@@ -25,5 +26,6 @@ module.exports = (app) => {
   app.use(api + "/services", serviceRouter);
   app.use(api + "/companies", companyRouter);
   app.use(api + "/yachtImages", yachtImageRouter);
-  app.use("/admin", adminRouter);
+  app.use(api + "/account-companies", accountCompanyRouter);
+  app.use(api + "/admin", adminRouter);
 };

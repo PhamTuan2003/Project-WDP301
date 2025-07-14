@@ -66,7 +66,14 @@ async function sendBookingConfirmationEmail(
 }
 
 // Hàm gửi email xác nhận đăng ký tư vấn
-async function sendConsultationEmail(to, fullName, bookingCode, checkInDate, guestCount, requirements) {
+async function sendConsultationEmail(
+  to,
+  fullName,
+  bookingCode,
+  checkInDate,
+  guestCount,
+  requirements
+) {
   if (!to || !/^[\w-.]+@([\w-]+\.)+[\w-]{2,}$/.test(to)) {
     throw new Error("Email không hợp lệ hoặc không tìm thấy email.");
   }
@@ -241,4 +248,10 @@ async function sendCompanyRegisterEmail(to, companyName, username, password) {
   return transporter.sendMail(mailOptions);
 }
 
-module.exports = { sendBookingConfirmationEmail,sendConsultationEmail, testSendMail, sendOTP, sendCompanyRegisterEmail };
+module.exports = {
+  sendBookingConfirmationEmail,
+  sendConsultationEmail,
+  testSendMail,
+  sendOTP,
+  sendCompanyRegisterEmail,
+};
