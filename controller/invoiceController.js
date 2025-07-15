@@ -16,32 +16,11 @@ const getInvoiceByTransaction = asyncHandler(async (req, res) => {
 
   try {
     const invoice = await Invoice.findOne({ transactionId: transactionId })
-      .populate({
-        path: "bookingId",
-        select:
-          "bookingCode confirmationCode customer yacht schedule checkInDate customerInfo",
-        populate: [
-          { path: "customer", select: "fullName email phoneNumber address" },
-          {
-            path: "yacht",
-            select: "name locationId",
-            populate: { path: "locationId", select: "name" },
-          },
-          // Nếu schedule là YachtSchedule, cần populate scheduleId
-          {
-            path: "schedule",
-            select: "scheduleId",
-            populate: {
-              path: "scheduleId",
-              select: "startDate endDate displayText",
-            },
-          },
-        ],
-      })
-      .populate(
-        "transactionId",
-        "transaction_reference transaction_type status completedAt amount payment_method"
-      );
+      .populate("bookingId")
+      .populate("transactionId")
+      .populate("customerId")
+      .populate("yachtId")
+      .populate("items.itemId");
 
     if (!invoice) {
       // Thử log tất cả invoice có transactionId là gì

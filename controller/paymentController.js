@@ -2,7 +2,7 @@ const Transaction = require("../model/transaction");
 const BookingOrder = require("../model/bookingOrder");
 const Invoice = require("../model/invoiceSchema");
 const BookingRoom = require("../model/bookingRoom");
-const Customer = require("../model/customer"); // For authorization
+const Customer = require("../model/customer");
 const mongoose = require("mongoose");
 const asyncHandler = require("express-async-handler");
 const momoService = require("../services/momoService");
@@ -69,26 +69,66 @@ const createInvoiceForTransaction = async (transactionId, session) => {
 
     // Lấy các phòng đã được chốt trong booking (từ consultationData.requestedRooms)
     let invoiceItems = [];
+    // Populate rooms
+    let requestedRooms = [];
     if (
       booking.consultationData &&
       booking.consultationData.requestedRooms &&
       booking.consultationData.requestedRooms.length > 0
     ) {
-      invoiceItems = booking.consultationData.requestedRooms.map((roomData) => {
-        const quantity = Number(
-          roomData.roomQuantity || roomData.quantity || 1
-        );
-        const price = Number(roomData.roomPrice || roomData.price || 0);
-        return {
-          type: "room",
-          name: roomData.roomName || roomData.name || "Phòng đặt",
-          description: roomData.roomDescription || roomData.description || "",
-          quantity,
-          unitPrice: quantity > 0 ? price / quantity : price,
-          totalPrice: price,
-        };
-      });
-    } else {
+      requestedRooms = await Promise.all(
+        booking.consultationData.requestedRooms.map(async (roomData) => {
+          let room = null;
+          if (roomData.roomId) {
+            room = await mongoose.model("Room").findById(roomData.roomId);
+          }
+          const quantity = Number(roomData.quantity || 1);
+          const unitPrice = Number(roomData.price || roomData.roomPrice || 0);
+          return {
+            type: "room",
+            itemId: roomData.roomId,
+            name: room?.name || "Phòng",
+            description: room?.description || "",
+            quantity,
+            unitPrice,
+            totalPrice: unitPrice * quantity,
+          };
+        })
+      );
+      invoiceItems = invoiceItems.concat(requestedRooms);
+    }
+    // Populate services
+    let requestedServices = [];
+    if (
+      booking.consultationData &&
+      booking.consultationData.requestServices &&
+      booking.consultationData.requestServices.length > 0
+    ) {
+      requestedServices = await Promise.all(
+        booking.consultationData.requestServices.map(async (serviceData) => {
+          let service = null;
+          if (serviceData.serviceId) {
+            service = await mongoose
+              .model("Service")
+              .findById(serviceData.serviceId);
+          }
+          const quantity = Number(serviceData.quantity || 1);
+          const unitPrice = Number(serviceData.price || service?.price || 0);
+          return {
+            type: "service",
+            itemId: serviceData.serviceId,
+            name: service?.serviceName || "Dịch vụ",
+            description: "",
+            quantity,
+            unitPrice,
+            totalPrice: unitPrice * quantity,
+          };
+        })
+      );
+      invoiceItems = invoiceItems.concat(requestedServices);
+    }
+    // Nếu không có phòng/dịch vụ thì tạo 1 item tổng
+    if (invoiceItems.length === 0) {
       invoiceItems.push({
         type: "service",
         name: `Dịch vụ đặt du thuyền ${booking.bookingCode}`,
@@ -97,28 +137,6 @@ const createInvoiceForTransaction = async (transactionId, session) => {
         totalPrice: Number(booking.amount) || 0,
       });
     }
-
-    // === THÊM DỊCH VỤ ĐÃ CHỌN ===
-    if (
-      booking.consultationData &&
-      booking.consultationData.requestServices &&
-      booking.consultationData.requestServices.length > 0
-    ) {
-      const serviceItems = booking.consultationData.requestServices.map(
-        (service) => ({
-          type: "service",
-          name: service.serviceName || "Dịch vụ bổ sung",
-          description: "",
-          quantity: Number(service.serviceQuantity) || 1,
-          unitPrice: Number(service.servicePrice) || 0,
-          totalPrice:
-            (Number(service.serviceQuantity) || 1) *
-            (Number(service.servicePrice) || 0),
-        })
-      );
-      invoiceItems = invoiceItems.concat(serviceItems);
-    }
-
     // Đảm bảo các trường số không bị NaN
     invoiceItems = invoiceItems.map((item) => ({
       ...item,
@@ -127,30 +145,16 @@ const createInvoiceForTransaction = async (transactionId, session) => {
       totalPrice: Number(item.totalPrice) || 0,
     }));
 
+    console.log("invoiceItems:", invoiceItems); // Log để kiểm tra dữ liệu items
+
     const newInvoice = new Invoice({
       bookingId: booking._id,
       transactionId: transaction._id,
-      customerInfo: {
-        customerId: customer._id,
-        fullName: booking.customerInfo?.fullName || customer.fullName,
-        email: booking.customerInfo?.email || customer.email,
-        phoneNumber: booking.customerInfo?.phoneNumber || customer.phoneNumber,
-        address: booking.customerInfo?.address || customer.address || "",
-      },
-      yachtInfo: {
-        yachtId: booking.yacht?._id,
-        name: booking.yacht?.name,
-        location: booking.yacht?.location,
-        scheduleInfo: booking.schedule
-          ? `${booking.schedule.startDate?.toLocaleDateString()} - ${booking.schedule.endDate?.toLocaleDateString()}`
-          : "",
-        checkInDate: booking.checkInDate,
-      },
+      customerId: booking.customer._id,
+      yachtId: booking.yacht?._id,
       items: invoiceItems,
       financials: {
         subtotal: invoiceItems.reduce((sum, item) => sum + item.totalPrice, 0),
-        totalTax: 0,
-        totalDiscount: 0,
         total: invoiceItems.reduce((sum, item) => sum + item.totalPrice, 0),
         paidAmount: transaction.amount,
         remainingAmount: 0,
@@ -338,16 +342,14 @@ const createPaymentRequestHandler = async (req, res, paymentType) => {
       });
     }
 
-    // Create transaction
+    // Create transaction (tối giản, chỉ lưu ref/nghiệp vụ)
     const transaction = new Transaction({
       bookingId: booking._id,
-      bookingCode: booking.bookingCode,
       amount: amountToPay,
       transaction_type: transactionType,
       status: "pending",
       payment_method: paymentMethod,
     });
-
     await transaction.save({ session });
 
     let paymentInitiationData = {
@@ -355,7 +357,6 @@ const createPaymentRequestHandler = async (req, res, paymentType) => {
       transactionReference: transaction.transaction_reference,
       amount: transaction.amount,
       paymentMethod: paymentMethod,
-      bookingCode: booking.bookingCode,
       message: `Thanh toán ${transaction.amount.toLocaleString(
         "vi-VN"
       )} VNĐ cho đơn hàng ${booking.bookingCode}`,
@@ -370,7 +371,8 @@ const createPaymentRequestHandler = async (req, res, paymentType) => {
         transferContent: `TT ${booking.bookingCode} ${transaction.transaction_reference}`,
       };
 
-      transaction.gateway_response = { bank: bankInfo };
+      if (!transaction.gateway_response) transaction.gateway_response = {};
+      transaction.gateway_response.bank = bankInfo;
       await transaction.save({ session });
 
       paymentInitiationData.bankInfo = bankInfo;
@@ -383,6 +385,7 @@ const createPaymentRequestHandler = async (req, res, paymentType) => {
         process.env.VNPAY_IPN_URL
       );
       paymentInitiationData.paymentUrl = paymentUrl;
+      if (!transaction.gateway_response) transaction.gateway_response = {};
       transaction.gateway_response.vnpay = { paymentUrl };
       await transaction.save({ session });
     } else if (paymentMethod === "momo") {
@@ -394,6 +397,7 @@ const createPaymentRequestHandler = async (req, res, paymentType) => {
       );
       paymentInitiationData.qrCodeUrl = momoResult.qrCodeUrl;
       paymentInitiationData.deeplink = momoResult.deeplink;
+      if (!transaction.gateway_response) transaction.gateway_response = {};
       transaction.gateway_response.momo = momoResult;
       await transaction.save({ session });
     }
@@ -435,14 +439,10 @@ const handleVnpayReturn = asyncHandler(async (req, res) => {
       );
   }
 
-  const transactionRef = vnp_Params["vnp_TxnRef"]; // Mã giao dịch của bạn (transaction.transaction_reference)
+  const transactionRef = vnp_Params["vnp_TxnRef"];
   const responseCode = vnp_Params["vnp_ResponseCode"];
 
-  // Không cập nhật DB ở return URL. Chỉ dùng để redirect KH.
-  // Trạng thái cuối cùng sẽ được cập nhật bởi IPN.
   if (responseCode === "00") {
-    // Có thể gọi QueryDR ở đây để lấy trạng thái chính xác hơn để hiển thị tạm cho KH.
-    // const transactionStatusFromGateway = await vnpayService.queryTransactionStatus(transactionRef, vnp_Params['vnp_PayDate']);
     res.redirect(
       `${process.env.CLIENT_URL}/payment-status?status=success&orderRef=${transactionRef}&gateway=vnpay`
     );
@@ -461,12 +461,9 @@ const handleVnpayIpn = asyncHandler(async (req, res) => {
   const vnp_Params = req.query; // VNPay IPN thường là GET
   console.log("VNPay IPN Params:", vnp_Params);
 
-  // TODO: Gọi vnpayService.verifySignature(vnp_Params, process.env.VNPAY_HASH_SECRET);
   const isValidSignature = true; // Giả sử hợp lệ để test
 
   if (!isValidSignature) {
-    console.error("VNPay IPN: Invalid signature", vnp_Params);
-    // PHẢI trả về response theo tài liệu VNPay để họ không gửi lại IPN
     return res
       .status(200)
       .json({ RspCode: "97", Message: "Invalid Signature" });
@@ -474,8 +471,8 @@ const handleVnpayIpn = asyncHandler(async (req, res) => {
 
   const transactionRef = vnp_Params["vnp_TxnRef"];
   const vnpResponseCode = vnp_Params["vnp_ResponseCode"];
-  const vnpTransactionNo = vnp_Params["vnp_TransactionNo"]; // Mã GD của VNPay
-  const amountFromGateway = parseInt(vnp_Params["vnp_Amount"]) / 100; // VNPay gửi amount * 100
+  const vnpTransactionNo = vnp_Params["vnp_TransactionNo"];
+  const amountFromGateway = parseInt(vnp_Params["vnp_Amount"]) / 100;
 
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -753,10 +750,10 @@ const simulatePaymentSuccess = asyncHandler(async (req, res, next) => {
     }
     // Gán thông tin mô phỏng vào bank
     transaction.gateway_response.bank = {
-      bankName: "Simulated Bank",
-      accountNumber: "0000000000",
-      accountName: "Simulated Account",
-      transferContent: "Simulated Content",
+      bankName: process.env.BANK_NAME,
+      accountNumber: process.env.BANK_ACCOUNT_NUMBER,
+      accountName: process.env.BANK_ACCOUNT_NAME,
+      transferContent: process.env.BANK_TRANSFER_CONTENT,
     };
     transaction.gateway_response.simulated_at = new Date().toISOString();
     transaction.gateway_response.message = "Simulated success by admin/test";
