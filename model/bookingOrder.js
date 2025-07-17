@@ -90,12 +90,14 @@ const bookingOrderSchema = new mongoose.Schema(
         {
           roomId: { type: mongoose.Schema.Types.ObjectId, ref: "Room" },
           quantity: { type: Number, default: 1 },
+          _id: false,
         },
       ],
       requestServices: [
         {
           serviceId: { type: mongoose.Schema.Types.ObjectId, ref: "Service" },
           quantity: { type: Number, default: 1 },
+          _id: false,
         },
       ],
       estimatedPrice: { type: Number, default: 0 },
@@ -107,6 +109,33 @@ const bookingOrderSchema = new mongoose.Schema(
     bookingCode: {
       type: String,
       sparse: true,
+    },
+    confirmationCode: {
+      type: String,
+      sparse: true,
+    },
+    confirmedAt: {
+      type: Date,
+    },
+    cancelledAt: {
+      type: Date,
+    },
+    paymentPendingAt: {
+      type: Date,
+    },
+    modificationDeadline: {
+      type: Date,
+    },
+    consultationStatus: {
+      type: String,
+      enum: ["requested", "sent", "responded"],
+      default: "requested",
+    },
+    consultationRequestedAt: {
+      type: Date,
+    },
+    consultationSentAt: {
+      type: Date,
     },
   },
   {

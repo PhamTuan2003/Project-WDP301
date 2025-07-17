@@ -180,9 +180,11 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
         };
       })
     );
+    // Khi tạo bookingOrder:
     const processedServices = (selectedServices || []).map((service) => ({
       serviceId: service.serviceId || service._id || service.id,
       quantity: service.serviceQuantity || service.quantity || 1,
+      // Không lưu price/serviceName
     }));
 
     // Lấy address: nếu không có trong req.body thì lấy từ customer
@@ -277,14 +279,24 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
     }
     // Lưu dịch vụ vào BookingService
     for (const service of processedServices) {
+      // Lấy giá dịch vụ từ DB
+      const serviceDoc = await mongoose
+        .model("Service")
+        .findById(service.serviceId);
+      if (!serviceDoc) {
+        await session.abortTransaction();
+        return res.status(400).json({
+          success: false,
+          message: `Không tìm thấy dịch vụ với ID: ${service.serviceId}`,
+        });
+      }
       await BookingService.create(
         [
           {
             bookingId: savedBookingOrder._id,
             serviceId: service.serviceId,
             quantity: service.quantity,
-            price: service.servicePrice, // Assuming servicePrice is available or can be derived
-            serviceName: service.serviceName,
+            price: serviceDoc.price, // Đảm bảo luôn có giá
           },
         ],
         { session }
@@ -731,13 +743,26 @@ exports.confirmBooking = asyncHandler(async (req, res) => {
     const requestServices = booking.consultationData?.requestServices || [];
     if (Array.isArray(requestServices) && requestServices.length > 0) {
       await BookingService.deleteMany({ bookingId: booking._id }, { session }); // Xóa cũ nếu có
-      const bookingServiceDocs = requestServices.map((service) => ({
-        bookingId: booking._id,
-        serviceId: service.serviceId,
-        price: service.servicePrice,
-        quantity: service.quantity,
-        name: service.serviceName,
-      }));
+      // Lấy giá dịch vụ từ DB cho từng service
+      const bookingServiceDocs = [];
+      for (const service of requestServices) {
+        const serviceDoc = await mongoose
+          .model("Service")
+          .findById(service.serviceId);
+        if (!serviceDoc) {
+          await session.abortTransaction();
+          return res.status(400).json({
+            success: false,
+            message: `Không tìm thấy dịch vụ với ID: ${service.serviceId}`,
+          });
+        }
+        bookingServiceDocs.push({
+          bookingId: booking._id,
+          serviceId: service.serviceId,
+          price: serviceDoc.price,
+          quantity: service.quantity,
+        });
+      }
       await BookingService.insertMany(bookingServiceDocs, { session });
     }
 
@@ -942,6 +967,7 @@ exports.updateBookingOrConsultationRequest = asyncHandler(async (req, res) => {
     ).map((service) => ({
       serviceId: service.serviceId || service._id || service.id,
       quantity: service.serviceQuantity || service.quantity || 1,
+      // Không lưu price/serviceName
     }));
     bookingOrder.consultationData.estimatedPrice = totalPrice || 0;
     const savedBookingOrder = await bookingOrder.save({ session });
@@ -973,14 +999,23 @@ exports.updateBookingOrConsultationRequest = asyncHandler(async (req, res) => {
         { session }
       );
       for (const service of req.body.selectedServices) {
+        const serviceDoc = await mongoose
+          .model("Service")
+          .findById(service.serviceId);
+        if (!serviceDoc) {
+          await session.abortTransaction();
+          return res.status(400).json({
+            success: false,
+            message: `Không tìm thấy dịch vụ với ID: ${service.serviceId}`,
+          });
+        }
         await BookingService.create(
           [
             {
               bookingId: savedBookingOrder._id,
               serviceId: service.serviceId,
               quantity: service.quantity,
-              price: service.price,
-              serviceName: service.serviceName,
+              price: serviceDoc.price,
             },
           ],
           { session }
@@ -1138,6 +1173,11 @@ exports.getCustomerBookings = asyncHandler(async (req, res) => {
   let bookings = await BookingOrder.find({ customer: req.user.customerId })
     .populate("yacht", "name images location")
     .populate("schedule", "startDate endDate")
+    .populate("consultationData.requestServices.serviceId")
+    .populate({
+      path: "consultationData.requestedRooms.roomId",
+      select: "name description area avatar max_people roomTypeId yachtId",
+    })
     .sort({ createdAt: -1 }); // Sắp xếp theo ngày tạo mới nhất
 
   // Tính days/nights cho schedule
@@ -1179,7 +1219,12 @@ exports.getCustomerBookingDetail = asyncHandler(async (req, res) => {
   let booking = await BookingOrder.findById(bookingId)
     .populate("yacht", "name images location")
     .populate("schedule", "startDate endDate")
-    .populate({ path: "customer", select: "fullName email phoneNumber" });
+    .populate({ path: "customer", select: "fullName email phoneNumber" })
+    .populate("consultationData.requestServices.serviceId")
+    .populate({
+      path: "consultationData.requestedRooms.roomId",
+      select: "name description area avatar max_people roomTypeId yachtId",
+    });
 
   if (!booking) {
     return res
@@ -1336,6 +1381,23 @@ exports.customerCancelBooking = asyncHandler(async (req, res) => {
         success: false,
         message: `Không thể hủy booking ở trạng thái ${booking.status}.`,
       });
+    }
+    // Nếu là confirmed, chỉ cho phép hủy trước ngày check-in 1 ngày
+    if (booking.status === "confirmed") {
+      const now = new Date();
+      const checkIn = new Date(booking.checkInDate);
+      const oneDayBeforeCheckIn = new Date(
+        checkIn.getTime() - 24 * 60 * 60 * 1000
+      );
+      if (now >= oneDayBeforeCheckIn) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(400).json({
+          success: false,
+          message:
+            "Chỉ có thể hủy booking đã xác nhận trước ngày nhận phòng 1 ngày.",
+        });
+      }
     }
 
     booking.status = "cancelled";
