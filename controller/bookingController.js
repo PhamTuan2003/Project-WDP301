@@ -1176,6 +1176,10 @@ exports.getCustomerBookings = asyncHandler(async (req, res) => {
     .populate({
       path: "consultationData.requestedRooms.roomId",
       select: "name description area avatar max_people roomTypeId yachtId",
+      populate: {
+        path: "roomTypeId",
+        select: "price",
+      },
     })
     .sort({ createdAt: -1 }); // Sắp xếp theo ngày tạo mới nhất
 
@@ -1223,6 +1227,10 @@ exports.getCustomerBookingDetail = asyncHandler(async (req, res) => {
     .populate({
       path: "consultationData.requestedRooms.roomId",
       select: "name description area avatar max_people roomTypeId yachtId",
+      populate: {
+        path: "roomTypeId",
+        select: "price",
+      },
     });
 
   if (!booking) {

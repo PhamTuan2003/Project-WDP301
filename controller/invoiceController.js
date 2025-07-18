@@ -1,7 +1,13 @@
 const PDFDocument = require("pdfkit");
 const asyncHandler = require("express-async-handler");
 const mongoose = require("mongoose");
-const { Transaction, Service, Room, Customer, Invoice } = require("../model");
+const {
+  Transaction,
+  Service,
+  Room,
+  Customer,
+  Invoice: InvoiceModel,
+} = require("../model");
 
 // Lấy invoice theo transaction ID (Mongoose ObjectId)
 const getInvoiceByTransaction = asyncHandler(async (req, res) => {
@@ -13,8 +19,28 @@ const getInvoiceByTransaction = asyncHandler(async (req, res) => {
   }
 
   try {
-    const invoice = await Invoice.findOne({ transactionId: transactionId })
-      .populate("bookingId")
+    const invoice = await InvoiceModel.findOne({ transactionId: transactionId })
+      .populate({
+        path: "bookingId",
+        select:
+          "bookingCode guestCount confirmationCode customer yacht schedule checkInDate customerInfo",
+        populate: [
+          { path: "customer", select: "fullName email phoneNumber address" },
+          {
+            path: "yacht",
+            select: "name locationId",
+            populate: { path: "locationId", select: "name" },
+          },
+          {
+            path: "schedule",
+            select: "scheduleId startDate endDate displayText",
+            populate: {
+              path: "scheduleId",
+              select: "startDate endDate displayText",
+            },
+          },
+        ],
+      })
       .populate("transactionId")
       .populate("customerId")
       .populate("yachtId")
@@ -22,7 +48,7 @@ const getInvoiceByTransaction = asyncHandler(async (req, res) => {
 
     if (!invoice) {
       // Thử log tất cả invoice có transactionId là gì
-      const allInvoices = await Invoice.find({}, "_id transactionId");
+      const allInvoices = await InvoiceModel.find({}, "_id transactionId");
 
       return res.status(404).json({
         success: false,
@@ -86,7 +112,7 @@ const getInvoiceById = asyncHandler(async (req, res) => {
   }
 
   try {
-    const invoice = await Invoice.findById(id)
+    const invoice = await InvoiceModel.findById(id)
       .populate({
         path: "bookingId",
         select:
@@ -100,7 +126,7 @@ const getInvoiceById = asyncHandler(async (req, res) => {
           },
           {
             path: "schedule",
-            select: "scheduleId",
+            select: "scheduleId startDate endDate displayText",
             populate: {
               path: "scheduleId",
               select: "startDate endDate displayText",
@@ -194,11 +220,11 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
   }
 
   try {
-    const invoice = await Invoice.findById(id)
+    const invoice = await InvoiceModel.findById(id)
       .populate({
         path: "bookingId",
         select:
-          "bookingCode confirmationCode customer yacht schedule checkInDate customerInfo",
+          "bookingCode confirmationCode customer yacht schedule checkInDate customerInfo consultationData",
         populate: [
           { path: "customer", select: "fullName email phoneNumber address" },
           {
@@ -208,17 +234,26 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
           },
           {
             path: "schedule",
-            select: "scheduleId",
+            select: "scheduleId startDate endDate displayText",
             populate: {
               path: "scheduleId",
               select: "startDate endDate displayText",
             },
           },
+          {
+            path: "consultationData.requestedRooms.roomId",
+            select: "name roomTypeId",
+            populate: { path: "roomTypeId", select: "price" },
+          },
+          {
+            path: "consultationData.requestServices.serviceId",
+            select: "serviceName price",
+          },
         ],
       })
       .populate(
         "transactionId",
-        "transaction_reference transaction_type status completedAt amount payment_method"
+        "transaction_reference transaction_type status transactionDate amount payment_method"
       );
 
     if (!invoice) {
@@ -291,15 +326,30 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
     doc.moveDown();
 
     // THÔNG TIN ĐỊNH DANH HÓA ĐƠN (box vàng)
-    doc.roundedRect(40, 80, 515, 55, 8).fillAndStroke("#fffbe6", "#f59e42");
+    doc.roundedRect(40, 80, 515, 40, 8).fillAndStroke("#fffbe6", "#f59e42");
     doc.fontSize(10).fillColor("#000").font("Archivo");
+    let issueDateValue = invoice.issueDate;
+    if (issueDateValue && typeof issueDateValue === "object") {
+      // Trường hợp Mongoose trả về Date object
+      if (issueDateValue instanceof Date) {
+        // OK
+      } else if (issueDateValue.$date) {
+        // Trường hợp JSON raw
+        issueDateValue = issueDateValue.$date;
+      } else if (typeof issueDateValue.toDate === "function") {
+        // Trường hợp là một đối tượng Date-like
+        issueDateValue = issueDateValue.toDate();
+      } else {
+        // Trường hợp khác, thử ép về string
+        issueDateValue = String(issueDateValue);
+      }
+    }
+    const issueDateStr = issueDateValue
+      ? new Date(issueDateValue).toLocaleDateString("vi-VN")
+      : "N/A";
     doc.text(
-      `Ký hiệu hóa đơn: AB/20E                Số hóa đơn: ${
-        invoice.invoiceNumber
-      }                        Ngày phát hành: ${
-        invoice.issueDate?.toLocaleDateString("vi-VN") || "N/A"
-      }`,
-      55,
+      `Ký hiệu hóa đơn: AB/20E                Số hóa đơn: ${invoice.invoiceNumber}                        Ngày phát hành: ${issueDateStr}`,
+      45,
       90,
       { width: 500 }
     );
@@ -344,7 +394,7 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
     doc
       .fillColor("#000")
       .text(
-        `Email: ${invoice.companyInfo?.email || "info@yacht.com"}`,
+        `Email: ${invoice.companyInfo?.email || "longware@yacht.com"}`,
         55,
         230,
         { width: 210 }
@@ -352,12 +402,34 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
     doc
       .fillColor("#2563eb")
       .text(
-        `Website: ${invoice.companyInfo?.website || "www.yacht.com"}`,
+        `Website: ${invoice.companyInfo?.website || "www.longware.com"}`,
         55,
         245,
         { width: 210 }
       );
     doc.fillColor("#000");
+
+    // ==== LẤY THÔNG TIN NGƯỜI MUA (KHÁCH HÀNG) ====
+    const bookingCustomer =
+      invoice.bookingId?.customer || invoice.customerId || {};
+    const bookingCustomerInfo =
+      invoice.bookingId?.customerInfo || invoice.customerInfo || {};
+    const customerName =
+      bookingCustomer.fullName || bookingCustomerInfo.fullName || "N/A";
+    const customerAddress =
+      bookingCustomer.address ||
+      bookingCustomerInfo.address ||
+      "Phường Cầu Giấy - Hà Nội";
+    const customerPhone =
+      bookingCustomer.phoneNumber || bookingCustomerInfo.phoneNumber || "N/A";
+    const customerEmail =
+      bookingCustomer.email || bookingCustomerInfo.email || "N/A";
+
+    // ==== LẤY THÔNG TIN THUYỀN ====
+    const bookingYacht = invoice.bookingId?.yacht || invoice.yachtId || {};
+    const yachtName = bookingYacht.name || "N/A";
+    const yachtLocation =
+      bookingYacht.locationId?.name || bookingYacht.locationId || "N/A";
 
     // THÔNG TIN NGƯỜI MUA (box xám)
     doc.roundedRect(315, 145, 240, 110, 10).fillAndStroke("#f3f4f6", "#67e8f9");
@@ -367,15 +439,10 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
       .fillColor("#22c55e")
       .text("Thông tin người mua", 330, 155);
     doc.font("Archivo").fontSize(10).fillColor("#000");
-    doc.text(`Họ và tên: ${invoice.customerInfo?.fullName || "N/A"}`, 330, 170);
-    if (invoice.bookingId.customer.address)
-      doc.text(`Địa chỉ: ${invoice.bookingId.customer.address}`, 330, 185);
-    doc.text(
-      `Số điện thoại: ${invoice.customerInfo?.phoneNumber || "N/A"}`,
-      330,
-      200
-    );
-    doc.text(`Email: ${invoice.customerInfo?.email || "N/A"}`, 330, 215);
+    doc.text(`Họ và tên: ${customerName}`, 330, 170);
+    doc.text(`Địa chỉ: ${customerAddress}`, 330, 185);
+    doc.text(`Số điện thoại: ${customerPhone}`, 330, 200);
+    doc.text(`Email: ${customerEmail}`, 330, 215);
     doc.fillColor("#000");
 
     // THÔNG TIN DỊCH VỤ (box xanh nhạt)
@@ -390,10 +457,8 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
       .text("Thông tin dịch vụ", 55, yService + 10);
     doc.font("Archivo").fontSize(10).fillColor("#000");
     let y = yService + 28;
-    if (invoice.yachtInfo?.name)
-      doc.text(`Du thuyền: ${invoice.yachtInfo.name}`, 55, y);
-    if (invoice.yachtInfo?.location)
-      doc.text(`Địa điểm: ${invoice.yachtInfo.location}`, 200, y);
+    doc.text(`Du thuyền: ${yachtName}`, 55, y);
+    doc.text(`Địa điểm: ${yachtLocation}`, 300, y);
 
     y += 15;
     // Hiển thị lịch trình từ nhiều nguồn khác nhau (PDF)
@@ -451,7 +516,7 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
     if (invoice.yachtInfo?.checkInDate)
       doc.text(
         `Ngày nhận phòng: ${new Date(
-          invoice.yachtInfo.checkInDate
+          bookingYacht?.checkInDate
         ).toLocaleDateString("vi-VN")}`,
         55,
         y
@@ -466,12 +531,12 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
       );
     if (invoice.guestInfo) {
       doc.text(
-        `Số khách: ${invoice.guestInfo.adults || 0} người lớn` +
-          (typeof invoice.guestInfo.childrenUnder10 === "number"
-            ? `, ${invoice.guestInfo.childrenUnder10} trẻ em dưới 10 tuổi`
+        `Số khách: ${bookingYacht.adults || 0} người lớn` +
+          (typeof bookingYacht.childrenUnder10 === "number"
+            ? `, ${bookingYacht.childrenUnder10} trẻ em dưới 10 tuổi`
             : "") +
-          (typeof invoice.guestInfo.childrenAbove10 === "number"
-            ? `, ${invoice.guestInfo.childrenAbove10} trẻ em từ 10 tuổi`
+          (typeof bookingYacht.childrenAbove10 === "number"
+            ? `, ${bookingYacht.childrenAbove10} trẻ em từ 10 tuổi`
             : ""),
         370,
         y
@@ -482,8 +547,8 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
         .fillColor("#64748b")
         .text(
           `Tổng khách quy đổi: ${
-            invoice.guestInfo.adults +
-            Math.floor((invoice.guestInfo.childrenAbove10 || 0) / 2)
+            bookingYacht.adults +
+            Math.floor((bookingYacht.childrenAbove10 || 0) / 2)
           } (2 trẻ em từ 10 tuổi = 1 người lớn, trẻ em dưới 10 tuổi không tính)`,
           370,
           y,
@@ -492,9 +557,65 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
       doc.fontSize(10).fillColor("#000");
     }
 
+    // Chuẩn bị mảng items với giá thực tế
+    const requestedRooms =
+      invoice.bookingId?.consultationData?.requestedRooms || [];
+    const requestServices =
+      invoice.bookingId?.consultationData?.requestServices || [];
+
+    const itemsWithRealPrice = await Promise.all(
+      invoice.items.map(async (item) => {
+        let unitPrice = item.unitPrice;
+        let displayName = item.name;
+        if (item.type === "room") {
+          const roomObj = requestedRooms.find(
+            (r) => String(r.roomId?._id) === String(item.itemId)
+          );
+          if (roomObj?.roomId?.name) {
+            displayName = roomObj.roomId.name;
+          } else {
+            // fallback: lấy từ DB nếu populate chưa đủ
+            const room = await Room.findById(item.itemId).select("name");
+            displayName = room ? room.name : item.displayName || item.name;
+          }
+          unitPrice = roomObj?.roomId?.roomTypeId?.price ?? item.unitPrice;
+        } else if (item.type === "service") {
+          const serviceObj = requestServices.find(
+            (s) => String(s.serviceId?._id) === String(item.itemId)
+          );
+          if (serviceObj?.serviceId?.serviceName) {
+            displayName = serviceObj.serviceId.serviceName;
+          } else {
+            // fallback: lấy từ DB nếu populate chưa đủ
+            const service = await Service.findById(item.itemId).select(
+              "serviceName"
+            );
+            displayName = service
+              ? service.serviceName
+              : item.displayName || item.name;
+          }
+          unitPrice = serviceObj?.serviceId?.price ?? item.unitPrice;
+        }
+        const totalPrice = unitPrice * item.quantity;
+        return { ...item, unitPrice, totalPrice, displayName };
+      })
+    );
+
+    // Tính lại các trường tổng
+    const subtotal = itemsWithRealPrice.reduce(
+      (sum, item) => sum + item.totalPrice,
+      0
+    );
+    const discount = invoice.financials?.totalDiscount ?? 0;
+    const amountBeforeTax = subtotal - discount;
+    const tax = amountBeforeTax * 0.05;
+    const total = amountBeforeTax + tax;
+    const paidAmount = invoice.financials?.paidAmount ?? 0;
+    const remainingAmount = total - paidAmount;
+
     // BẢNG CHI TIẾT DỊCH VỤ
     let tableY = yService + 85;
-    const tableHeight = 30 + 24 * (invoice.items?.length || 1); // tăng chiều cao mỗi dòng
+    const tableHeight = 30 + 24 * (itemsWithRealPrice?.length || 1); // tăng chiều cao mỗi dòng
     doc.roundedRect(40, tableY, 515, tableHeight, 8).stroke("#60a5fa");
     // Vẽ header bảng với chỉ bo góc trên
     doc.save();
@@ -511,11 +632,12 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
     doc.text("Thành tiền", 435, tableY + 8, { width: 110, align: "right" });
     doc.font("Archivo").fillColor("#000");
     let rowY = tableY + 30;
-    invoice.items?.forEach((item, idx) => {
+    itemsWithRealPrice?.forEach((item, idx) => {
+      const displayName = item.displayName;
       doc.text(idx + 1, 50, rowY + 6, { width: 35, align: "center" });
-      doc.text(item.name, 85, rowY + 6, { width: 140 });
+      doc.text(displayName, 85, rowY + 6, { width: 140 });
       const unit =
-        item.name && item.name.toLowerCase().includes("phòng")
+        displayName && displayName.toLowerCase().includes("phòng")
           ? "Phòng"
           : "Người";
       doc.text(unit, 225, rowY + 6, { width: 60, align: "center" });
@@ -539,46 +661,28 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
     let yTotal = totalY + 10;
     doc.font("Archivo").fontSize(10).fillColor("#000");
     doc.text("Tổng tiền hàng hóa, dịch vụ", 290, yTotal);
-    doc.text(
-      invoice.financials?.subtotal?.toLocaleString("vi-VN") || "0",
-      500,
-      yTotal
-    );
+    doc.text(subtotal.toLocaleString("vi-VN"), 500, yTotal);
     yTotal += 15;
-    if (invoice.financials?.totalDiscount > 0) {
+    if (discount > 0) {
       doc.fillColor("#ef4444").text("Chiết khấu thương mại", 290, yTotal);
-      doc.text(
-        "-" + invoice.financials.totalDiscount.toLocaleString("vi-VN"),
-        500,
-        yTotal
-      );
+      doc.text("-" + discount.toLocaleString("vi-VN"), 500, yTotal);
       yTotal += 15;
     }
     doc.fillColor("#000").text("Tiền chưa có thuế VAT", 290, yTotal);
-    const amountBeforeTax =
-      (invoice.financials?.subtotal || 0) -
-      (invoice.financials?.totalDiscount || 0);
     doc.text(amountBeforeTax.toLocaleString("vi-VN"), 500, yTotal);
     yTotal += 15;
     doc.fillColor("#f59e42").text("Thuế VAT (5%)", 290, yTotal);
-    const tax = amountBeforeTax * 0.05;
     doc.text(tax.toLocaleString("vi-VN"), 510, yTotal);
     yTotal += 15;
     doc
       .font("Archivo-Bold")
       .fillColor("#2563eb")
       .text("TỔNG TIỀN THANH TOÁN", 290, yTotal);
-    const total = amountBeforeTax + tax;
     doc.text(total.toLocaleString("vi-VN"), 500, yTotal);
     yTotal += 18;
     doc.font("Archivo").fillColor("#22c55e").text("Đã thanh toán", 290, yTotal);
-    doc.text(
-      invoice.financials?.paidAmount?.toLocaleString("vi-VN") || "0",
-      500,
-      yTotal
-    );
+    doc.text(paidAmount.toLocaleString("vi-VN"), 500, yTotal);
     yTotal += 15;
-    const remainingAmount = total - (invoice.financials?.paidAmount || 0);
     if (remainingAmount > 0) {
       doc.fillColor("#f59e42").text("Còn lại", 290, yTotal);
       doc.text(remainingAmount.toLocaleString("vi-VN"), 500, yTotal);
@@ -613,17 +717,12 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
       yPay += 15;
       doc.fillColor("#000");
 
-      doc.text(
-        `Thời gian thanh toán: ${
-          invoice.transactionId.completedAt
-            ? new Date(invoice.transactionId.completedAt).toLocaleString(
-                "vi-VN"
-              )
-            : "N/A"
-        }`,
-        55,
-        yPay
-      );
+      const paymentTime = invoice.transactionId?.transactionDate
+        ? new Date(invoice.transactionId.transactionDate).toLocaleString(
+            "vi-VN"
+          )
+        : "N/A";
+      doc.text(`Thời gian thanh toán: ${paymentTime}`, 55, yPay);
     } else {
       doc.text("Chưa có thông tin giao dịch liên kết.", 55, yPay);
     }
@@ -649,7 +748,7 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
     }
 
     // CHỮ KÝ (2 cột, căn giữa)
-    let signY = payY + 120;
+    let signY = payY + 70;
     doc
       .font("Archivo-Bold")
       .fontSize(11)
@@ -671,10 +770,15 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
       .font("Archivo")
       .fontSize(10)
       .fillColor("#000")
-      .text(invoice.customerInfo?.fullName || "", 100, signY + 55, {
-        width: 120,
-        align: "center",
-      });
+      .text(
+        bookingCustomer.fullName || bookingCustomerInfo.fullName || "",
+        100,
+        signY + 55,
+        {
+          width: 120,
+          align: "center",
+        }
+      );
     doc
       .font("Archivo-Bold")
       .fontSize(11)
@@ -762,7 +866,7 @@ const getCustomerInvoices = asyncHandler(async (req, res) => {
     }
 
     // Find invoices where customerInfo.customerId matches
-    const invoices = await Invoice.find({
+    const invoices = await InvoiceModel.find({
       "customerInfo.customerId": customer._id,
     })
       .populate({
@@ -796,8 +900,41 @@ const getInvoiceByBooking = asyncHandler(async (req, res) => {
       .json({ success: false, message: "Booking ID không hợp lệ." });
   }
   try {
-    const invoice = await Invoice.findOne({ bookingId })
-      .populate("bookingId")
+    const invoice = await InvoiceModel.findOne({ bookingId })
+      .populate({
+        path: "bookingId",
+        select:
+          "bookingCode confirmationCode consultationData guestCount adults childrenBelow10 childrenAbove10 customer yacht schedule checkInDate customerInfo",
+        populate: [
+          { path: "customer", select: "fullName email phoneNumber address" },
+          {
+            path: "yacht",
+            select: "name locationId",
+            populate: { path: "locationId", select: "name" },
+          },
+          {
+            path: "schedule",
+            select: "scheduleId startDate endDate displayText",
+            populate: {
+              path: "scheduleId",
+              select: "startDate endDate displayText",
+            },
+          },
+          {
+            path: "consultationData.requestedRooms.roomId",
+            select: "name price roomTypeId",
+            populate: {
+              path: "roomTypeId",
+              select: "price",
+            },
+          },
+          {
+            path: "consultationData.requestServices.serviceId",
+            select: "serviceName price",
+            model: "Service",
+          },
+        ],
+      })
       .populate("transactionId")
       .populate("customerId")
       .populate("yachtId")
@@ -809,8 +946,29 @@ const getInvoiceByBooking = asyncHandler(async (req, res) => {
       });
     }
     // Authorization (có thể thêm kiểm tra quyền truy cập như các hàm khác)
+    // Populate displayName for each item
+    const populatedItems = await Promise.all(
+      invoice.items.map(async (item) => {
+        let displayName = "";
+        if (item.type === "room" && item.itemId) {
+          const room = await Room.findById(item.itemId).select("name");
+          displayName = room ? room.name : "Phòng";
+        } else if (item.type === "service" && item.itemId) {
+          const service = await Service.findById(item.itemId).select(
+            "serviceName"
+          );
+          displayName = service ? service.serviceName : "Dịch vụ";
+        }
+        return {
+          ...(item.toObject ? item.toObject() : item),
+          displayName,
+        };
+      })
+    );
+    invoice.items = populatedItems;
     res.json({ success: true, data: invoice });
   } catch (error) {
+    console.error("Error in getInvoiceByBooking:", error);
     res.status(500).json({
       success: false,
       message: "Lỗi server khi lấy invoice.",
@@ -922,7 +1080,7 @@ const createInvoiceManual = asyncHandler(async (req, res) => {
     } else if (booking.schedule && booking.schedule.displayText) {
       scheduleInfo = booking.schedule.displayText;
     }
-    const newInvoice = new Invoice({
+    const newInvoice = new InvoiceModel({
       bookingId: booking._id,
       transactionId: transaction._id,
       customerInfo: {

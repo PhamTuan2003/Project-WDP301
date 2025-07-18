@@ -5,8 +5,6 @@ const morgan = require("morgan");
 const cors = require("cors");
 const errorHandler = require("./middleware/errorHandles");
 const router = require("./routers/index");
-
-// Import scheduled job tự động cleanup booking
 require("./utils/bookingCleanupJob");
 
 const app = express();

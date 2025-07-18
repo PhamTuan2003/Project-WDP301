@@ -215,9 +215,6 @@ const processSuccessfulPayment = async (transaction, session) => {
       booking.paymentStatus === "fully_paid")
   ) {
     booking.status = "confirmed";
-    // booking.confirmedAt và booking.confirmationCode sẽ được Hook của BookingOrder xử lý khi status là 'confirmed'
-
-    // Tạo BookingRoom entries từ consultationData.requestedRooms sau khi booking được confirmed
     const existingBookingRooms = await BookingRoom.find({
       bookingId: booking._id,
     }).session(session);
@@ -574,7 +571,6 @@ const handleVnpayIpn = asyncHandler(async (req, res) => {
 
 const handleMomoReturn = asyncHandler(async (req, res) => {
   const momoParams = req.query;
-  console.log("MoMo Return Params:", momoParams);
 
   // TODO: Gọi momoService.verifySignature(momoParams, process.env.MOMO_SECRET_KEY, false); false vì là return URL
   const isValidSignature = true; // Giả sử
