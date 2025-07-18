@@ -1,18 +1,9 @@
-// models/invoice.js
 const mongoose = require("mongoose");
 
 const invoiceSchema = new mongoose.Schema({
   invoiceNumber: {
     type: String,
     unique: true,
-    required: true,
-  },
-  issueDate: {
-    type: Date,
-    default: Date.now,
-  },
-  dueDate: {
-    type: Date,
     required: true,
   },
   bookingId: {

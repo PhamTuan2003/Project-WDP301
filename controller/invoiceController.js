@@ -1,9 +1,7 @@
-const Invoice = require("../model/invoiceSchema");
-const Customer = require("../model/customer"); // For authorization
 const PDFDocument = require("pdfkit");
 const asyncHandler = require("express-async-handler");
-const mongoose = require("mongoose"); // For ObjectId validation
-const Transaction = require("../model/transaction");
+const mongoose = require("mongoose");
+const { Transaction, Service, Room, Customer, Invoice } = require("../model");
 
 // Lấy invoice theo transaction ID (Mongoose ObjectId)
 const getInvoiceByTransaction = asyncHandler(async (req, res) => {
@@ -100,7 +98,6 @@ const getInvoiceById = asyncHandler(async (req, res) => {
             select: "name locationId",
             populate: { path: "locationId", select: "name" },
           },
-          // Nếu schedule là YachtSchedule, cần populate scheduleId
           {
             path: "schedule",
             select: "scheduleId",
@@ -122,6 +119,27 @@ const getInvoiceById = asyncHandler(async (req, res) => {
         message: "Invoice không tồn tại",
       });
     }
+    const populatedItems = await Promise.all(
+      invoice.items.map(async (item) => {
+        let detail = null;
+        let displayName = "";
+        if (item.type === "room") {
+          detail = await Room.findById(item.itemId).select("name");
+          displayName = detail ? detail.name : "Phòng";
+        } else if (item.type === "service") {
+          detail = await Service.findById(item.itemId).select("serviceName");
+          displayName = detail ? detail.serviceName : "Dịch vụ";
+        }
+        return {
+          ...item.toObject(),
+          detail,
+          displayName,
+        };
+      })
+    );
+    // Gán lại items đã populate detail
+    const invoiceObj = invoice.toObject();
+    invoiceObj.items = populatedItems;
 
     // Authorization (similar to above)
     let canAccess = false;
@@ -154,7 +172,7 @@ const getInvoiceById = asyncHandler(async (req, res) => {
 
     res.json({
       success: true,
-      data: invoice,
+      data: invoiceObj,
     });
   } catch (error) {
     console.error("Error getting invoice by ID:", error);
@@ -769,6 +787,38 @@ const getCustomerInvoices = asyncHandler(async (req, res) => {
   }
 });
 
+// Lấy invoice theo bookingId
+const getInvoiceByBooking = asyncHandler(async (req, res) => {
+  const { bookingId } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+    return res
+      .status(400)
+      .json({ success: false, message: "Booking ID không hợp lệ." });
+  }
+  try {
+    const invoice = await Invoice.findOne({ bookingId })
+      .populate("bookingId")
+      .populate("transactionId")
+      .populate("customerId")
+      .populate("yachtId")
+      .populate("items.itemId");
+    if (!invoice) {
+      return res.status(404).json({
+        success: false,
+        message: "Invoice không tồn tại cho booking này.",
+      });
+    }
+    // Authorization (có thể thêm kiểm tra quyền truy cập như các hàm khác)
+    res.json({ success: true, data: invoice });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Lỗi server khi lấy invoice.",
+      error: error.message,
+    });
+  }
+});
+
 // Tạo hóa đơn thủ công (admin hoặc backend gọi)
 const createInvoiceManual = asyncHandler(async (req, res) => {
   const { transactionId } = req.body;
@@ -951,4 +1001,5 @@ module.exports = {
   downloadInvoicePDF,
   getCustomerInvoices,
   createInvoiceManual,
+  getInvoiceByBooking,
 };

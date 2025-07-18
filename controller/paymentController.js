@@ -133,8 +133,8 @@ const createInvoiceForTransaction = async (transactionId, session) => {
         type: "service",
         name: `Dịch vụ đặt du thuyền ${booking.bookingCode}`,
         quantity: 1,
-        unitPrice: Number(booking.amount) || 0,
-        totalPrice: Number(booking.amount) || 0,
+        unitPrice: Number(booking.paymentBreakdown.totalAmount) || 0,
+        totalPrice: Number(booking.paymentBreakdown.totalAmount) || 0,
       });
     }
     // Đảm bảo các trường số không bị NaN
@@ -185,11 +185,12 @@ const processSuccessfulPayment = async (transaction, session) => {
 
   let newTotalPaid =
     (booking.paymentBreakdown.totalPaid || 0) + transaction.amount;
-  newTotalPaid = Math.min(newTotalPaid, booking.amount); // Đảm bảo totalPaid không vượt quá totalAmount
+  newTotalPaid = Math.min(newTotalPaid, booking.paymentBreakdown.totalAmount); // Đảm bảo totalPaid không vượt quá totalAmount
 
   booking.paymentBreakdown.totalPaid = newTotalPaid;
   // booking.paymentBreakdown.remainingAmount sẽ được pre-save hook của BookingOrder tính lại, hoặc ta tự tính:
-  booking.paymentBreakdown.remainingAmount = booking.amount - newTotalPaid;
+  booking.paymentBreakdown.remainingAmount =
+    booking.paymentBreakdown.totalAmount - newTotalPaid;
 
   if (transaction.transaction_type === "deposit") {
     booking.paymentStatus = "deposit_paid";
@@ -304,11 +305,14 @@ const createPaymentRequestHandler = async (req, res, paymentType) => {
         });
       }
       amountToPay =
-        booking.paymentBreakdown?.depositAmount || booking.amount * 0.2;
+        booking.paymentBreakdown?.depositAmount ||
+        booking.paymentBreakdown.totalAmount * 0.2;
       transactionType = "deposit";
     } else {
       // Full payment
-      amountToPay = booking.paymentBreakdown?.remainingAmount || booking.amount;
+      amountToPay =
+        booking.paymentBreakdown?.remainingAmount ||
+        booking.paymentBreakdown.totalAmount;
       transactionType =
         booking.paymentBreakdown?.totalPaid > 0
           ? "final_payment"

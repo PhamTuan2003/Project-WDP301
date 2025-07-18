@@ -7,16 +7,10 @@ const moment = require("moment"); // Để format ngày giờ theo yêu cầu VN
 const VNPAY_TMN_CODE = process.env.VNPAY_TMN_CODE;
 const VNPAY_HASH_SECRET = process.env.VNPAY_HASH_SECRET;
 const VNPAY_URL = process.env.VNPAY_URL;
-const VNPAY_API_URL = process.env.VNPAY_API_URL; // QueryDR URL
+const VNPAY_API_URL = process.env.VNPAY_API_URL; // QueryDR URL (dùng cho querydr)
+const VNPAY_RETURN_URL = process.env.VNPAY_RETURN_URL;
+const VNPAY_IPN_URL = process.env.VNPAY_IPN_URL; // Dùng cho IPN callback nếu có
 
-/**
- * Tạo URL thanh toán VNPay
- * @param {object} transaction - Đối tượng Transaction từ DB
- * @param {object} booking - Đối tượng BookingOrder từ DB
- * @param {string} returnUrl - URL khách hàng sẽ được redirect về sau thanh toán
- * @param {string} ipnUrl - URL VNPay sẽ gọi để thông báo kết quả (server-to-server)
- * @returns {object} { paymentUrl: string, vnp_TxnRef_Gateway: string }
- */
 async function createPaymentUrl(
   transaction,
   booking,
@@ -82,7 +76,6 @@ function verifySignature(vnp_Params, secureHashSecret) {
   return secureHash === signed;
 }
 
-
 async function queryTransactionStatus(
   orderId,
   transactionDate,
@@ -111,7 +104,7 @@ async function queryTransactionStatus(
 
   try {
     const response = await axios.post(
-      VNPAY_API_URL,
+      VNPAY_API_URL, // Sử dụng API URL cho querydr
       querystring.stringify(vnp_Params, { encode: false }),
       {
         headers: { "Content-Type": "application/x-www-form-urlencoded" },

@@ -202,7 +202,6 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
       customer: customer._id,
       yacht: yachtId,
       schedule: scheduleId || null,
-      amount: totalPrice || 0,
       status: requestType,
       requirements: requirements || "",
       guestCount: totalGuestCount,
@@ -210,6 +209,10 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
       childrenUnder10: req.body.childrenUnder10 ?? 0,
       childrenAbove10: req.body.childrenAbove10 ?? 0,
       checkInDate: checkIn,
+      paymentBreakdown: {
+        totalAmount: totalPrice || 0,
+        // các trường khác để mặc định
+      },
       consultationData: {
         notes: req.body.consultationData?.notes || "",
         respondedAt: req.body.consultationData?.respondedAt || null,
@@ -324,7 +327,9 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
           savedBookingOrder.bookingCode,
           checkInDateStr,
           savedBookingOrder.guestCount,
-          savedBookingOrder.amount?.toLocaleString("vi-VN")
+          savedBookingOrder.paymentBreakdown.totalAmount?.toLocaleString(
+            "vi-VN"
+          )
         );
       }
     } catch (mailErr) {
@@ -344,15 +349,12 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
         bookingCode: savedBookingOrder.bookingCode,
         confirmationCode: savedBookingOrder.confirmationCode,
         status: savedBookingOrder.status,
-        consultationStatus: savedBookingOrder.consultationStatus,
-        amount: savedBookingOrder.amount,
+        amount: savedBookingOrder.paymentBreakdown.totalAmount,
         paymentBreakdown: savedBookingOrder.paymentBreakdown,
         selectedServices: selectedServices,
       },
     });
   } catch (err) {
-    // Thêm log lỗi chi tiết
-    console.error("[ERROR] /bookings/request:", err);
     await session.abortTransaction();
     return res
       .status(500)
@@ -458,11 +460,7 @@ exports.customerConfirmBookingAfterConsultation = asyncHandler(
         });
       }
 
-      if (
-        booking.consultationStatus !== "sent" ||
-        booking.status === "pending_payment" ||
-        booking.status === "confirmed"
-      ) {
+      if (booking.status !== "consultation_requested") {
         await session.abortTransaction();
         session.endSession();
         return res.status(400).json({
@@ -473,7 +471,6 @@ exports.customerConfirmBookingAfterConsultation = asyncHandler(
       }
 
       booking.status = "pending_payment";
-      booking.consultationStatus = "responded";
 
       const savedBooking = await booking.save({ session });
 
@@ -505,7 +502,9 @@ exports.customerConfirmBookingAfterConsultation = asyncHandler(
           populatedBooking.bookingCode,
           checkInDateStr,
           populatedBooking.guestCount,
-          populatedBooking.amount?.toLocaleString("vi-VN"),
+          populatedBooking.paymentBreakdown.totalAmount?.toLocaleString(
+            "vi-VN"
+          ),
           {
             yachtName,
             roomListHtml,
@@ -529,7 +528,7 @@ exports.customerConfirmBookingAfterConsultation = asyncHandler(
           bookingId: savedBooking._id.toString(),
           bookingCode: savedBooking.bookingCode,
           status: savedBooking.status,
-          amountToPay: savedBooking.amount,
+          amountToPay: savedBooking.paymentBreakdown.totalAmount,
           paymentBreakdown: savedBooking.paymentBreakdown,
         },
       });

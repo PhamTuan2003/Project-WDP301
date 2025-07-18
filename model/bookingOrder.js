@@ -24,11 +24,6 @@ const bookingOrderSchema = new mongoose.Schema(
       ref: "YachtSchedule",
       default: null,
     },
-    amount: {
-      type: Number,
-      required: true,
-      min: 0,
-    },
     status: {
       type: String,
       enum: [
@@ -53,10 +48,6 @@ const bookingOrderSchema = new mongoose.Schema(
       depositPercentage: { type: Number, default: 20 },
       remainingAmount: { type: Number, default: 0 },
       totalPaid: { type: Number, default: 0 },
-    },
-    requirements: {
-      type: String,
-      default: "",
     },
     guestCount: {
       type: Number,
@@ -101,6 +92,10 @@ const bookingOrderSchema = new mongoose.Schema(
         },
       ],
       estimatedPrice: { type: Number, default: 0 },
+      requirements: {
+        type: String,
+        default: "",
+      },
     },
     transactionId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -113,29 +108,6 @@ const bookingOrderSchema = new mongoose.Schema(
     confirmationCode: {
       type: String,
       sparse: true,
-    },
-    confirmedAt: {
-      type: Date,
-    },
-    cancelledAt: {
-      type: Date,
-    },
-    paymentPendingAt: {
-      type: Date,
-    },
-    modificationDeadline: {
-      type: Date,
-    },
-    consultationStatus: {
-      type: String,
-      enum: ["requested", "sent", "responded"],
-      default: "requested",
-    },
-    consultationRequestedAt: {
-      type: Date,
-    },
-    consultationSentAt: {
-      type: Date,
     },
   },
   {
@@ -168,23 +140,12 @@ bookingOrderSchema.pre("save", function (next) {
   }
 
   // Tính toán payment breakdown
-  this.paymentBreakdown.totalAmount = this.amount;
+  const total = this.paymentBreakdown.totalAmount || 0;
   this.paymentBreakdown.depositAmount = Math.round(
-    (this.amount * this.paymentBreakdown.depositPercentage) / 100
+    (total * this.paymentBreakdown.depositPercentage) / 100
   );
   this.paymentBreakdown.remainingAmount =
-    this.amount - this.paymentBreakdown.totalPaid;
-
-  // Set modification deadline (7 days before check-in)
-  if (
-    !this.modificationDeadline &&
-    this.checkInDate &&
-    this.status === "confirmed"
-  ) {
-    this.modificationDeadline = new Date(
-      this.checkInDate.getTime() - 7 * 24 * 60 * 60 * 1000
-    );
-  }
+    total - (this.paymentBreakdown.totalPaid || 0);
 
   // Set timestamps dựa trên thay đổi trạng thái
   if (this.isModified("status")) {

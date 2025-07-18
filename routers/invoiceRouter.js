@@ -9,6 +9,11 @@ router.get(
   veryfiToken,
   invoiceController.getInvoiceByTransaction
 );
+router.get(
+  "/by-booking/:bookingId",
+  veryfiToken,
+  invoiceController.getInvoiceByBooking
+);
 router.get("/:id/download", veryfiToken, invoiceController.downloadInvoicePDF);
 router.get("/my-invoices", veryfiToken, invoiceController.getCustomerInvoices);
 router.post(
