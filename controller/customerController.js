@@ -69,65 +69,64 @@ const login = async (req, res) => {
     const { username, password } = req.body;
 
     if (!username || !password) {
-      return res
-        .status(400)
-        .json({ message: "Hãy điền tên đăng nhập và mật khẩu" });
+      return res.status(400).json({ message: "Hãy điền tên đăng nhập và mật khẩu" });
     }
 
     const account = await Account.findOne({ username });
     if (!account) {
-      return res
-        .status(400)
-        .json({ message: "Tên đăng nhập hoặc mật khẩu không đúng" });
+      return res.status(400).json({ message: "Tên đăng nhập hoặc mật khẩu không đúng" });
     }
 
     const isMatch = await bcryptjs.compare(password, account.password);
     if (!isMatch) {
-      return res
-        .status(400)
-        .json({ message: "Tên đăng nhập hoặc mật khẩu không đúng" });
+      return res.status(400).json({ message: "Tên đăng nhập hoặc mật khẩu không đúng" });
     }
 
-    const customer = await Customer.findOne({ accountId: account._id });
-    if (!customer) {
-      console.log(`Không tìm thấy khách hàng với accountId: ${account._id}`);
-      return res
-        .status(404)
-        .json({ message: "Không tìm thấy thông tin khách hàng" });
-    }
-
+    // Sinh JWT token
     const token = jwt.sign(
       { _id: account._id, role: account.roles },
       process.env.JWT_SECRET,
-      {
-        expiresIn: "7d",
-      }
+      { expiresIn: "7d" }
     );
 
-    // Nếu avatar tồn tại, thêm BASE_URL vào trước đường dẫn (trừ khi avatar là URL từ Google)
-    const avatar = customer.avatar
-      ? customer.avatar.startsWith("http")
-        ? customer.avatar
-        : `${BASE_URL}${customer.avatar}`
-      : null;
+    // Nếu là CUSTOMER thì cố gắng lấy thêm thông tin hồ sơ
+    let customerInfo = null;
+    if (account.roles === "CUSTOMER") {
+      const customer = await Customer.findOne({ accountId: account._id });
 
+      if (customer) {
+        const avatar = customer.avatar
+          ? customer.avatar.startsWith("http")
+            ? customer.avatar
+            : `${BASE_URL}${customer.avatar}`
+          : null;
+
+        customerInfo = {
+          fullName: customer.fullName,
+          email: customer.email,
+          phoneNumber: customer.phoneNumber,
+          avatar,
+        };
+      }
+    }
+
+    // Response trả về gồm thông tin chung + thông tin riêng nếu có
     res.json({
       message: "Đăng nhập thành công",
       token,
       customer: {
-        id: customer._id,
-        fullName: customer.fullName,
-        email: customer.email,
-        phoneNumber: customer.phoneNumber,
+        id: account._id,
         username: account.username,
-        avatar: avatar,
-        accountId: customer.accountId,
+        role: account.roles,
+        ...customerInfo, // nếu null thì không thêm gì, nếu có thì merge vào
       },
     });
   } catch (error) {
+    console.error("❌ Lỗi login backend:", error);
     res.status(500).json({ message: "Lỗi server khi đăng nhập" });
   }
 };
+
 
 // Hàm đăng nhập bằng Google (login with Google)
 const googleLogin = async (req, res) => {
