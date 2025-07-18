@@ -9,38 +9,21 @@ const bookingOrderSchema = new mongoose.Schema(
       required: true,
     },
     customerInfo: {
-      fullName: { type: String, required: true },
-      email: { type: String, required: true },
-      phoneNumber: { type: String, required: true },
+      fullName: String,
+      email: String,
+      phoneNumber: String,
       address: String,
-      saveForFuture: { type: Boolean, default: true },
     },
-
     yacht: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Yacht",
       required: true,
     },
-
     schedule: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "YachtSchedule",
       default: null,
     },
-
-    // Mã booking tự động sinh
-    bookingCode: {
-      type: String,
-      unique: true,
-      index: true,
-    },
-
-    amount: {
-      type: Number,
-      required: true,
-      min: 0,
-    },
-
     status: {
       type: String,
       enum: [
@@ -54,172 +37,77 @@ const bookingOrderSchema = new mongoose.Schema(
       ],
       default: "consultation_requested",
     },
-
-    // Trạng thái consultation riêng biệt
-    consultationStatus: {
-      type: String,
-      enum: ["not_requested", "requested", "sent", "responded"],
-      default: "not_requested",
-    },
-
     paymentStatus: {
       type: String,
       enum: ["unpaid", "deposit_paid", "fully_paid"],
       default: "unpaid",
     },
-
-    // Cải thiện payment breakdown
     paymentBreakdown: {
       totalAmount: { type: Number, default: 0 },
       depositAmount: { type: Number, default: 0 },
-      depositPercentage: { type: Number, default: 20 }, // 20%
+      depositPercentage: { type: Number, default: 20 },
       remainingAmount: { type: Number, default: 0 },
       totalPaid: { type: Number, default: 0 },
     },
-
-    confirmationCode: {
-      type: String,
-      unique: true,
-      sparse: true,
-    },
-
-    requirements: {
-      type: String,
-      default: "",
-    },
-
     guestCount: {
       type: Number,
       required: true,
       min: 1,
     },
-
     adults: {
       type: Number,
       required: true,
       min: 1,
       default: 1,
     },
-
     childrenUnder10: {
       type: Number,
       required: true,
       min: 0,
       default: 0,
     },
-
     childrenAbove10: {
       type: Number,
       required: true,
       min: 0,
       default: 0,
     },
-
     checkInDate: {
       type: Date,
       required: true,
     },
-
-    // Tracking timestamps
-    consultationRequestedAt: Date,
-    consultationSentAt: Date,
-    paymentPendingAt: Date,
-    cancelledAt: Date,
-    confirmedAt: Date,
-
-    // Chi tiết consultation data
     consultationData: {
       requestedRooms: [
         {
-          roomId: { type: String, required: true },
-          roomName: String,
-          roomDescription: String,
-          roomArea: Number,
-          roomAvatar: String,
-          roomMaxPeople: Number,
-          roomPrice: Number,
-          roomQuantity: Number,
-          roomBeds: Number,
-          roomImage: String,
+          roomId: { type: mongoose.Schema.Types.ObjectId, ref: "Room" },
+          quantity: { type: Number, default: 1 },
+          _id: false,
         },
       ],
       requestServices: [
         {
-          serviceId: { type: String, required: true },
-          serviceName: String,
-          servicePrice: Number,
-          serviceQuantity: Number,
+          serviceId: { type: mongoose.Schema.Types.ObjectId, ref: "Service" },
+          quantity: { type: Number, default: 1 },
+          _id: false,
         },
       ],
-      estimatedPrice: {
-        type: Number,
-        min: 0,
-      },
-      createdAt: {
-        type: Date,
-        default: Date.now,
-      },
-      status: {
+      estimatedPrice: { type: Number, default: 0 },
+      requirements: {
         type: String,
-        enum: ["pending", "contacted", "completed"],
-        default: "pending",
+        default: "",
       },
-      notes: String,
-      respondedAt: Date,
-
-      assignedStaff: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Staff",
-      },
-      // Priority level
-      priority: {
-        type: String,
-        enum: ["low", "normal", "high", "urgent"],
-        default: "normal",
-      },
-    },
-
-    // Modification history
-    modifications: [
-      {
-        type: {
-          type: String,
-          enum: [
-            "add_room",
-            "remove_room",
-            "change_guest_count",
-            "change_date",
-          ],
-        },
-        originalData: mongoose.Schema.Types.Mixed,
-        newData: mongoose.Schema.Types.Mixed,
-        additionalCost: { type: Number, default: 0 },
-        status: {
-          type: String,
-          enum: ["pending", "approved", "rejected"],
-          default: "pending",
-        },
-        requestedAt: { type: Date, default: Date.now },
-        processedAt: Date,
-        processedBy: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "Staff",
-        },
-        notes: String,
-      },
-    ],
-
-    // Settings
-    allowModifications: { type: Boolean, default: true },
-    modificationDeadline: Date, // Deadline để modification
-
-    create_time: {
-      type: Date,
-      default: Date.now,
     },
     transactionId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Transaction",
+    },
+    bookingCode: {
+      type: String,
+      sparse: true,
+    },
+    confirmationCode: {
+      type: String,
+      sparse: true,
     },
   },
   {
@@ -252,23 +140,12 @@ bookingOrderSchema.pre("save", function (next) {
   }
 
   // Tính toán payment breakdown
-  this.paymentBreakdown.totalAmount = this.amount;
+  const total = this.paymentBreakdown.totalAmount || 0;
   this.paymentBreakdown.depositAmount = Math.round(
-    (this.amount * this.paymentBreakdown.depositPercentage) / 100
+    (total * this.paymentBreakdown.depositPercentage) / 100
   );
   this.paymentBreakdown.remainingAmount =
-    this.amount - this.paymentBreakdown.totalPaid;
-
-  // Set modification deadline (7 days before check-in)
-  if (
-    !this.modificationDeadline &&
-    this.checkInDate &&
-    this.status === "confirmed"
-  ) {
-    this.modificationDeadline = new Date(
-      this.checkInDate.getTime() - 7 * 24 * 60 * 60 * 1000
-    );
-  }
+    total - (this.paymentBreakdown.totalPaid || 0);
 
   // Set timestamps dựa trên thay đổi trạng thái
   if (this.isModified("status")) {

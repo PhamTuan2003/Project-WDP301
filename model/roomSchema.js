@@ -6,6 +6,12 @@ const roomSchema = new Schema({
   description: String,
   area: Number,
   avatar: String,
+  price: {
+    type: Number,
+    required: true,
+    min: 0,
+    default: 0,
+  },
   max_people: {
     type: Number,
     required: true,

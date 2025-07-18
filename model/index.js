@@ -1,15 +1,15 @@
 const Account = require("./account");
-const InvoiceSchema = require("./invoiceSchema");
 const BookingOrder = require("./bookingOrder");
 const BookingRoom = require("./bookingRoom");
 const BookingService = require("./bookingService");
 const Company = require("./company");
 const Customer = require("./customer");
 const Feedback = require("./feedback");
+const Invoice = require("./invoiceSchema");
 const Location = require("./location");
 const OtpForgotPassword = require("./otpForgotPassword");
 const RoomImages = require("./roomImages");
-const RoomSchema = require("./roomSchema");
+const Room = require("./roomSchema");
 const RoomType = require("./roomType");
 const Schedule = require("./schedule");
 const ScheduleTask = require("./scheduleTask");
@@ -23,7 +23,6 @@ const YachtType = require("./yachtType");
 
 module.exports = {
   Account,
-  InvoiceSchema,
   BookingOrder,
   BookingRoom,
   BookingService,
@@ -33,7 +32,7 @@ module.exports = {
   Location,
   OtpForgotPassword,
   RoomImages,
-  RoomSchema,
+  Room,
   RoomType,
   Schedule,
   ScheduleTask,
@@ -44,4 +43,5 @@ module.exports = {
   YachtSchema,
   YachtService,
   YachtType,
+  Invoice,
 };

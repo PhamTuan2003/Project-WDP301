@@ -2,6 +2,8 @@ const jwt = require("jsonwebtoken");
 const Customer = require("../model/customer");
 
 const veryfiToken = async (req, res, next) => {
+  // Log header để kiểm tra token có về BE không
+  console.log("Authorization header:", req.headers.authorization);
   const authHeader = req.headers["authorization"];
   if (!authHeader) return res.status(401).json({ message: "Không có Token" });
 
@@ -27,7 +29,10 @@ const veryfiToken = async (req, res, next) => {
 
     next();
   } catch (err) {
-    res.status(401).json({ message: "Token không hợp lệ hoặc đã hết hạn" });
+    console.error("JWT verify error:", err);
+    return res
+      .status(401)
+      .json({ success: false, message: "Token không hợp lệ" });
   }
 };
 // const adminProtect = (req, res, next) => {

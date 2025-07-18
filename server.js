@@ -5,6 +5,7 @@ const morgan = require("morgan");
 const cors = require("cors");
 const errorHandler = require("./middleware/errorHandles");
 const router = require("./routers/index");
+require("./utils/bookingCleanupJob");
 
 const app = express();
 
