@@ -42,6 +42,12 @@ router.get("/test-send-mail", async (req, res) => {
   }
 });
 
+// Lấy toàn bộ bookingOrder (chỉ cho admin)
+router.get("/all", veryfiToken, bookingController.getAllBookingOrders);
+
+// Lấy danh sách bookingOrder của company (chỉ cho admin)
+router.get("/company", bookingController.getBookingOrdersByCompany);
+
 // Thêm route lưu dịch vụ tư vấn vào consultationData.requestServices
 router.post(
   "/consultation-services",

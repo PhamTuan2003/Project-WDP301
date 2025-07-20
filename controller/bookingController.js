@@ -1343,3 +1343,87 @@ exports.deleteBookingOrder = asyncHandler(async (req, res) => {
     message: "Booking đã được xóa thành công.",
   });
 });
+
+// Lấy toàn bộ bookingOrder theo idCompany (chỉ cho admin)
+exports.getAllBookingOrders = asyncHandler(async (req, res) => {
+  if (!req.user || req.user.role !== 'admin') {
+    return res.status(403).json({
+      success: false,
+      message: 'Bạn không có quyền truy cập!'
+    });
+  }
+  const { idCompany } = req.query;
+  if (!idCompany) {
+    return res.status(400).json({
+      success: false,
+      message: 'Thiếu idCompany!'
+    });
+  }
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 20;
+  const skip = (page - 1) * limit;
+
+  const filter = { };
+  // BookingOrder có thể lưu company dưới trường IdCompanys hoặc companyId hoặc yacht.IdCompanys tuỳ thiết kế
+  // Giả sử trường là IdCompanys (nếu khác báo lại)
+  filter["IdCompanys"] = idCompany;
+
+  const total = await BookingOrder.countDocuments(filter);
+  const data = await BookingOrder.find(filter)
+    .populate('customer', 'fullName email phoneNumber')
+    .populate('yacht', 'name')
+    .populate('schedule', 'startDate endDate')
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limit);
+
+  res.status(200).json({
+    success: true,
+    total,
+    page,
+    limit,
+    data
+  });
+});
+
+// Lấy danh sách bookingOrder của company thông qua bảng Yacht (chỉ cho admin)
+exports.getBookingOrdersByCompany = asyncHandler(async (req, res) => {
+  if (!req.user || req.user.role !== 'admin') {
+    return res.status(403).json({
+      success: false,
+      message: 'Bạn không có quyền truy cập!'
+    });
+  }
+  const { idCompany } = req.query;
+  if (!idCompany) {
+    return res.status(400).json({
+      success: false,
+      message: 'Thiếu idCompany!'
+    });
+  }
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 20;
+  const skip = (page - 1) * limit;
+
+  // Lấy tất cả yacht thuộc công ty
+  const yachts = await Yacht.find({ IdCompanys: idCompany }).select('_id');
+  const yachtIds = yachts.map(y => y._id);
+
+  // Lấy tất cả bookingOrder có yacht thuộc danh sách trên
+  const total = await BookingOrder.countDocuments({ yacht: { $in: yachtIds } });
+  const data = await BookingOrder.find({ yacht: { $in: yachtIds } })
+    .populate('customer', 'fullName email phoneNumber')
+    .populate('yacht', 'name')
+    .populate('schedule', 'startDate endDate')
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limit);
+
+  res.status(200).json({
+    success: true,
+    total,
+    page,
+    limit,
+    data
+  });
+});
