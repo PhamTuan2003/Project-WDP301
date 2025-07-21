@@ -31,15 +31,13 @@ const parseGuestCount = (guestCountValue) => {
 
 // ==================== BOOKING ROOM FUNCTIONS ====================
 exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
-  // Thêm log dữ liệu đầu vào để debug
   console.log(
-    "[DEBUG] /bookings/request req.body:",
+    "[Booking] Incoming booking request:",
     JSON.stringify(req.body, null, 2)
   );
   const {
     yachtId,
     scheduleId,
-    checkInDate,
     guestCount,
     selectedRooms,
     totalPrice,
@@ -54,7 +52,6 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
 
   const requiredFields = {
     yachtId,
-    checkInDate,
     guestCount,
     fullName,
     phoneNumber,
@@ -103,15 +100,6 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
     });
   }
 
-  const checkIn = new Date(checkInDate);
-
-  if (isNaN(checkIn.getTime()) || checkIn < new Date()) {
-    return res.status(400).json({
-      success: false,
-      message: "Ngày check-in không hợp lệ hoặc đã qua.",
-    });
-  }
-
   if (!req.user.customerId) {
     return res.status(401).json({
       success: false,
@@ -136,7 +124,6 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
     const existingBooking = await BookingOrder.findOne({
       customer: req.user.customerId,
       yacht: yachtId,
-      checkInDate: checkIn,
       status: { $in: ["consultation_requested", "pending_payment"] },
     }).session(session);
 
@@ -208,7 +195,6 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
       adults: req.body.adults ?? 1,
       childrenUnder10: req.body.childrenUnder10 ?? 0,
       childrenAbove10: req.body.childrenAbove10 ?? 0,
-      checkInDate: checkIn,
       paymentBreakdown: {
         totalAmount: totalPrice || 0,
         // các trường khác để mặc định
@@ -308,9 +294,17 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
 
     // Gửi email xác nhận theo loại booking
     try {
-      const checkInDateStr = new Date(
-        savedBookingOrder.checkInDate
-      ).toLocaleDateString("vi-VN");
+      let checkInDateStr = "";
+      if (savedBookingOrder.schedule) {
+        const scheduleDoc = await mongoose
+          .model("Schedule")
+          .findById(savedBookingOrder.schedule);
+        if (scheduleDoc && scheduleDoc.startDate) {
+          checkInDateStr = new Date(scheduleDoc.startDate).toLocaleDateString(
+            "vi-VN"
+          );
+        }
+      }
       if (requestType === "consultation_requested") {
         await sendConsultationEmail(
           email,
@@ -356,6 +350,10 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
     });
   } catch (err) {
     await session.abortTransaction();
+    console.error(
+      "[Booking] Error in createBookingOrConsultationRequest:",
+      err
+    );
     return res
       .status(500)
       .json({ success: false, message: "Internal error", error: err.message });
@@ -480,9 +478,17 @@ exports.customerConfirmBookingAfterConsultation = asyncHandler(
           .lean();
 
         const yachtName = populatedBooking.yacht?.name || "(Không rõ)";
-        const checkInDateStr = new Date(
-          populatedBooking.checkInDate
-        ).toLocaleDateString("vi-VN");
+        let checkInDateStr = "";
+        if (populatedBooking.schedule) {
+          const scheduleDoc = await mongoose
+            .model("Schedule")
+            .findById(populatedBooking.schedule);
+          if (scheduleDoc && scheduleDoc.startDate) {
+            checkInDateStr = new Date(scheduleDoc.startDate).toLocaleDateString(
+              "vi-VN"
+            );
+          }
+        }
 
         const rooms = (populatedBooking.consultationData?.requestedRooms || [])
           .map(
@@ -555,6 +561,7 @@ exports.updateBookingStatus = asyncHandler(async (req, res) => {
     "consultation_requested",
     "consultation_sent", // Added from BookingOrder schema
     "confirmed",
+    "confirmed_deposit",
     "completed",
     "cancelled",
     "rejected",
@@ -606,11 +613,11 @@ exports.updateBookingStatus = asyncHandler(async (req, res) => {
     const oldStatus = booking.status;
     booking.status = status;
 
-    if (status === "confirmed") {
+    if (["confirmed", "confirmed_deposit"].includes(status)) {
       if (scheduleId) booking.schedule = scheduleId; // Update schedule if provided
       // The pre-save hook in BookingOrder will set confirmationCode and confirmedAt.
 
-      // Create BookingRoom entries if moving to "confirmed" and they don't exist
+      // Create BookingRoom entries if moving to confirmed/confirmed_deposit and they don't exist
       const existingBookingRooms = await BookingRoom.find({
         bookingId: booking._id,
       }).session(session);
@@ -686,7 +693,7 @@ exports.confirmBooking = asyncHandler(async (req, res) => {
       });
     }
 
-    if (booking.status === "confirmed") {
+    if (["confirmed", "confirmed_deposit"].includes(booking.status)) {
       await session.abortTransaction(); // No need to re-confirm
       session.endSession();
       return res.status(400).json({
@@ -1389,8 +1396,8 @@ exports.customerCancelBooking = asyncHandler(async (req, res) => {
         message: `Không thể hủy booking ở trạng thái ${booking.status}.`,
       });
     }
-    // Nếu là confirmed, chỉ cho phép hủy trước ngày check-in 1 ngày
-    if (booking.status === "confirmed") {
+    // Nếu là confirmed hoặc confirmed_deposit, chỉ cho phép hủy trước ngày check-in 1 ngày
+    if (["confirmed", "confirmed_deposit"].includes(booking.status)) {
       const now = new Date();
       const checkIn = new Date(booking.checkInDate);
       const oneDayBeforeCheckIn = new Date(

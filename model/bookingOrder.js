@@ -28,10 +28,10 @@ const bookingOrderSchema = new mongoose.Schema(
       type: String,
       enum: [
         "consultation_requested",
-        "consultation_sent",
         "pending_payment",
         "confirmed",
         "completed",
+        "confirmed_deposit",
         "cancelled",
         "rejected",
       ],
@@ -71,10 +71,6 @@ const bookingOrderSchema = new mongoose.Schema(
       required: true,
       min: 0,
       default: 0,
-    },
-    checkInDate: {
-      type: Date,
-      required: true,
     },
     consultationData: {
       requestedRooms: [
@@ -126,7 +122,7 @@ bookingOrderSchema.pre("save", function (next) {
   }
   if (
     this.isModified("status") &&
-    this.status === "confirmed" &&
+    ["confirmed", "confirmed_deposit"].includes(this.status) &&
     !this.confirmationCode
   ) {
     this.confirmationCode =

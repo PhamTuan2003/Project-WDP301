@@ -214,7 +214,11 @@ const processSuccessfulPayment = async (transaction, session) => {
     (booking.paymentStatus === "deposit_paid" ||
       booking.paymentStatus === "fully_paid")
   ) {
-    booking.status = "confirmed";
+    if (booking.paymentStatus === "deposit_paid") {
+      booking.status = "confirmed_deposit";
+    } else if (booking.paymentStatus === "fully_paid") {
+      booking.status = "confirmed";
+    }
     const existingBookingRooms = await BookingRoom.find({
       bookingId: booking._id,
     }).session(session);
