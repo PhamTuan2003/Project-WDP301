@@ -9,6 +9,7 @@ const {
   YachtType,
   Company,
   Service,
+  YachtImages,
 } = require("../model");
 
 // Hàm lấy tất cả du thuyền
@@ -38,6 +39,166 @@ const getAllYacht = async (req, res) => {
       message: "Lỗi server khi lấy du thuyền",
       error: err.message,
     });
+  }
+};
+
+const createYacht = async (req, res) => {
+    try {
+        const {
+            name,
+            launch,
+            description,
+            hullBody,
+            rule,
+            itinerary,
+            locationId,
+            yachtTypeId,
+            IdCompanys,
+            maxRoom
+        } = req.body;
+
+        // req.file.path là secure_url từ Cloudinary
+        if (!req.file || !req.file.path) {
+            return res.status(400).json({ message: 'Image upload failed or not provided' });
+        }
+
+        const yacht = new YachtSchema({
+            name,
+            image: req.file.path,
+            launch,
+            description,
+            hullBody,
+            rule,
+            itinerary,
+            locationId,
+            yachtTypeId,
+            IdCompanys,
+            maxRoom
+        });
+
+        await yacht.save();
+        res.status(201).json(yacht);
+    } catch (error) {
+        console.error('Error creating yacht:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+};
+
+
+const updateYacht = async (req, res) => {
+    try {
+        const yachtId = req.params.id;
+
+        const {
+            name,
+            launch,
+            description,
+            hullBody,
+            rule,
+            itinerary,
+            locationId,
+            yachtTypeId,
+            IdCompanys,
+            maxRoom
+        } = req.body;
+
+        const updateData = {
+            name,
+            launch,
+            description,
+            hullBody,
+            rule,
+            itinerary,
+            locationId,
+            yachtTypeId,
+            IdCompanys,
+            maxRoom,
+            updatedAt: Date.now()
+        };
+
+        // Nếu người dùng upload ảnh mới
+        if (req.file && req.file.path) {
+            updateData.image = req.file.path;
+        }
+
+        const updatedYacht = await YachtSchema.findByIdAndUpdate(
+            yachtId,
+            updateData,
+            { new: true, runValidators: true }
+        );
+
+        if (!updatedYacht) {
+            return res.status(404).json({ message: 'Yacht not found' });
+        }
+
+        res.status(200).json({
+            message: 'Yacht updated successfully',
+            yacht: updatedYacht
+        });
+    } catch (error) {
+        console.error('Error updating yacht:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+};
+
+
+const addServiceToYacht = async (req, res) => {
+  try {
+    const { serviceName, price, yachtId } = req.body;
+
+    if (!serviceName || price == null || !yachtId) {
+      return res.status(400).json({ message: 'serviceName, price, and yachtId are required' });
+    }
+
+    // 1. Tạo dịch vụ mới
+    const newService = new Service({ serviceName, price });
+    const savedService = await newService.save();
+
+    // 2. Gắn dịch vụ vào thuyền
+    const yachtService = new YachtService({
+      yachtId,
+      serviceId: savedService._id
+    });
+    await yachtService.save();
+
+    return res.status(201).json({
+      message: 'Service created and added to yacht successfully',
+      service: savedService
+    });
+
+  } catch (error) {
+    console.error('Error adding service to yacht:', error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+const addScheduleToYacht = async (req, res) => {
+  try {
+    const { startDate, endDate, yachtId } = req.body;
+
+    if (!startDate || !endDate || !yachtId) {
+      return res.status(400).json({ message: 'startDate, endDate, and yachtId are required' });
+    }
+
+    // 1. Tạo schedule mới
+    const newSchedule = new Schedule({ startDate, endDate });
+    const savedSchedule = await newSchedule.save();
+
+    // 2. Gắn schedule vào yacht
+    const yachtSchedule = new YachtSchedule({
+      yachtId,
+      scheduleId: savedSchedule._id
+    });
+    await yachtSchedule.save();
+
+    return res.status(201).json({
+      message: 'Schedule created and assigned to yacht successfully',
+      schedule: savedSchedule
+    });
+
+  } catch (error) {
+    console.error('Error adding schedule to yacht:', error);
+    return res.status(500).json({ message: 'Internal server error' });
   }
 };
 
@@ -255,135 +416,82 @@ const getYachtById = async (req, res) => {
   }
 };
 
-// Hàm tạo du thuyền mới
-const createYacht = async (req, res) => {
+// Hàm lấy danh sách du thuyền theo id company
+const getYachtsByCompanyId = async (req, res) => {
   try {
-    const { name, launch, description, hullBody, rule, itinerary, location_id, yachtType_id, id_companys } = req.body;
+    const { companyId } = req.params;
+    const limit = parseInt(req.query.limit) || 0;
 
-    // req.file.path là secure_url từ Cloudinary
-    if (!req.file || !req.file.path) {
-      return res.status(400).json({ message: "Image upload failed or not provided" });
+    // Kiểm tra company có tồn tại không
+    const company = await Company.findById(companyId);
+    if (!company) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy công ty với id này",
+      });
     }
 
-    const yacht = new YachtSchema({
-      name,
-      image: req.file.path,
-      launch,
-      description,
-      hullBody,
-      rule,
-      itinerary,
-      location_id,
-      yachtType_id,
-      id_companys,
-    });
+    const yachtsQuery = YachtSchema.find({ IdCompanys: companyId })
+      .populate("locationId", "_id name")
+      .populate("yachtTypeId", "_id name ranking")
+      .populate("IdCompanys", "_id name address logo");
 
-    await yacht.save();
-    res.status(201).json(yacht);
-  } catch (error) {
-    console.error("Error creating yacht:", error);
-    res.status(500).json({ message: "Internal server error" });
-  }
-};
-
-//Hàm cập nhật thông tin du thuyền
-const updateYacht = async (req, res) => {
-  try {
-    const yachtId = req.params.id;
-
-    const { name, launch, description, hullBody, rule, itinerary, location_id, yachtType_id, id_companys } = req.body;
-
-    const updateData = {
-      name,
-      launch,
-      description,
-      hullBody,
-      rule,
-      itinerary,
-      location_id,
-      yachtType_id,
-      id_companys,
-      updatedAt: Date.now(),
-    };
-
-    // Nếu người dùng upload ảnh mới
-    if (req.file && req.file.path) {
-      updateData.image = req.file.path;
+    if (limit > 0) {
+      yachtsQuery.limit(limit);
     }
 
-    const updatedYacht = await YachtSchema.findByIdAndUpdate(yachtId, updateData, { new: true, runValidators: true });
-
-    if (!updatedYacht) {
-      return res.status(404).json({ message: "Yacht not found" });
-    }
+    const yachts = await yachtsQuery;
 
     res.status(200).json({
-      message: "Yacht updated successfully",
-      yacht: updatedYacht,
+      success: true,
+      message: `Lấy danh sách du thuyền của công ty ${company.name} thành công`,
+      data: yachts,
+      total: yachts.length,
+      company: {
+        id: company._id,
+        name: company.name,
+        address: company.address,
+        logo: company.logo
+      }
     });
-  } catch (error) {
-    console.error("Error updating yacht:", error);
-    res.status(500).json({ message: "Internal server error" });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: "Lỗi server khi lấy danh sách du thuyền theo công ty",
+      error: err.message,
+    });
   }
 };
 
-// Hàm thêm dịch vụ vào du thuyền
-const addServiceToYacht = async (req, res) => {
+// API cập nhật lịch trình của du thuyền
+const updateScheduleToYacht = async (req, res) => {
   try {
-    const { serviceName, price, yachtId } = req.body;
+    const { yachtId, scheduleId } = req.params;
+    const { startDate, endDate } = req.body;
 
-    if (!serviceName || price == null || !yachtId) {
-      return res.status(400).json({ message: "serviceName, price, and yachtId are required" });
+    // Tìm YachtSchedule
+    const yachtSchedule = await YachtSchedule.findOne({ yachtId, scheduleId });
+    if (!yachtSchedule) {
+      return res.status(404).json({ message: 'Không tìm thấy lịch trình này của du thuyền' });
     }
 
-    // 1. Tạo dịch vụ mới
-    const newService = new Service({ serviceName, price });
-    const savedService = await newService.save();
-
-    // 2. Gắn dịch vụ vào thuyền
-    const yachtService = new YachtService({
-      yachtId,
-      serviceId: savedService._id,
-    });
-    await yachtService.save();
-
-    return res.status(201).json({
-      message: "Service created and added to yacht successfully",
-      service: savedService,
-    });
-  } catch (error) {
-    console.error("Error adding service to yacht:", error);
-    return res.status(500).json({ message: "Internal server error" });
-  }
-};
-
-// Hàm thêm lịch trình vào du thuyền
-const addScheduleToYacht = async (req, res) => {
-  try {
-    const { startDate, endDate, yachtId } = req.body;
-
-    if (!startDate || !endDate || !yachtId) {
-      return res.status(400).json({ message: "startDate, endDate, and yachtId are required" });
+    // Update schedule
+    const schedule = await Schedule.findByIdAndUpdate(
+      scheduleId,
+      { startDate, endDate },
+      { new: true, runValidators: true }
+    );
+    if (!schedule) {
+      return res.status(404).json({ message: 'Không tìm thấy schedule' });
     }
 
-    // 1. Tạo schedule mới
-    const newSchedule = new Schedule({ startDate, endDate });
-    const savedSchedule = await newSchedule.save();
-
-    // 2. Gắn schedule vào yacht
-    const yachtSchedule = new YachtSchedule({
-      yachtId,
-      scheduleId: savedSchedule._id,
-    });
-    await yachtSchedule.save();
-
-    return res.status(201).json({
-      message: "Schedule created and assigned to yacht successfully",
-      schedule: savedSchedule,
+    return res.status(200).json({
+      message: 'Cập nhật lịch trình thành công',
+      schedule
     });
   } catch (error) {
-    console.error("Error adding schedule to yacht:", error);
-    return res.status(500).json({ message: "Internal server error" });
+    console.error('Error updating schedule:', error);
+    return res.status(500).json({ message: 'Lỗi server khi cập nhật lịch trình' });
   }
 };
 
@@ -399,4 +507,6 @@ module.exports = {
   addServiceToYacht,
   addScheduleToYacht,
   updateYacht,
+  getYachtsByCompanyId,
+  updateScheduleToYacht,
 };

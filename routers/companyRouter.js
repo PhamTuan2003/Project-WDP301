@@ -11,23 +11,33 @@ const {
   getRevenueBooking,
   getRevenueService,
   getMonthlyRevenue,
-  exportBooking
+  exportBooking,
+  getInfoCompany,
+  loginCompany,
+  getBookingByYear,
+  getTotalBookingStats,
 } = require("../controller/companyController");
+const { veryfiToken } = require("../middleware/authMiddleware");
 
 // CRUD COMPANY
 router.post("/", createCompany); // Tạo công ty
 router.get("/", getAllCompany); // Lấy company có exist = 1 (cho FE hiển thị)
 router.get("/all", getAllCompanies); // Lấy tất cả (cả exist = 0)
-router.put("/:id", updateCompany); // Cập nhật
-router.delete("/:id", deleteCompany); // Xoá
-router.get("/count", countCompanies); // Đếm tổng
+router.put("/:id", veryfiToken, updateCompany); // Cập nhật
+router.delete("/:id", veryfiToken, deleteCompany); // Xoá
+router.get("/count", veryfiToken, countCompanies); // Đếm tổng
 
 // DOANH THU
 router.get("/revenue/booking", getRevenueBooking); // Doanh thu từ booking
 router.get("/revenue/service", getRevenueService); // Doanh thu từ dịch vụ
-router.get("/revenue/monthly", getMonthlyRevenue); // Tổng hợp từng tháng
+router.get("/revenue/monthly", veryfiToken, getMonthlyRevenue); // Tổng hợp từng tháng
+router.get("/booking-by-year", getBookingByYear);
+router.get("/total-booking-stats", getTotalBookingStats);
 
 // EXPORT FILE
-router.get("/export/:idCompany", exportBooking); // Xuất file Excel
+router.get("/export/:idCompany", veryfiToken, exportBooking); // Xuất file Excel
+
+router.get("/info/:id", veryfiToken, getInfoCompany); // Lấy thông tin công ty theo ID
+router.post("/login", loginCompany);
 
 module.exports = router;

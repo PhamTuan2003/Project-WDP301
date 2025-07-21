@@ -20,6 +20,7 @@ const YachtSchedule = require("./yachtSchedule");
 const YachtSchema = require("./yachtSchema");
 const YachtService = require("./yachtService");
 const YachtType = require("./yachtType");
+const Yacht = require("./yachtSchema");
 
 module.exports = {
   Account,
@@ -44,4 +45,5 @@ module.exports = {
   YachtService,
   YachtType,
   Invoice,
+  Yacht,
 };

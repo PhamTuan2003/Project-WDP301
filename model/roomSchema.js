@@ -6,12 +6,6 @@ const roomSchema = new Schema({
   description: String,
   area: Number,
   avatar: String,
-  price: {
-    type: Number,
-    required: true,
-    min: 0,
-    default: 0,
-  },
   max_people: {
     type: Number,
     required: true,
@@ -21,6 +15,7 @@ const roomSchema = new Schema({
   },
   roomTypeId: { type: mongoose.Schema.Types.ObjectId, ref: "RoomType" },
   yachtId: { type: mongoose.Schema.Types.ObjectId, ref: "Yacht" },
+  quantity: Number,
 });
 
 module.exports = mongoose.model("Room", roomSchema, "rooms");

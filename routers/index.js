@@ -11,6 +11,8 @@ const serviceRouter = require("./serviceRouter");
 const adminRouter = require("./adminRouter");
 const yachtImageRouter = require("./yachtImageRouter");
 const accountCompanyRouter = require("./accountCompanyRouter");
+const locationRouter = require("./locationRouter");
+const yachtTypeRouter = require("./yachtTypeRouter");
 
 module.exports = (app) => {
   const api = "/api/v1";
@@ -24,8 +26,22 @@ module.exports = (app) => {
   app.use(api + "/invoices", invoiceRouter);
   app.use(api + "/feedback", feedbackRouter);
   app.use(api + "/services", serviceRouter);
-  app.use(api + "/companies", companyRouter);
+  app.use(api + "/locations", locationRouter);
+  app.use(api + "/yachtTypes", yachtTypeRouter);
   app.use(api + "/yachtImages", yachtImageRouter);
   app.use(api + "/account-companies", accountCompanyRouter);
   app.use(api + "/admin", adminRouter);
 };
+
+// module.exports = (app) => {
+//     const api = "/api";
+//     app.use(api + '/companies/yacht', yachtRouter)
+//     app.use(api + '/rooms', roomRouter)
+//     app.use(api + '/company', companyRouter)
+//     app.use(api + '/companies', locationRouter)
+//     app.use(api + '/companies', yachtTypeRouter)
+//     app.use(api + '/', serviceRouter)
+//     app.use(api + "/yachtImages", yachtImageRouter);
+//     app.use(api + "/customers", customerRouter);
+//     app.use(api + "/bookings", bookingRouter);
+// }

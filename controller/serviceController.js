@@ -9,19 +9,25 @@ exports.getServicesByYacht = async (req, res) => {
     const yachtServices = await YachtService.find({ yachtId }).populate(
       "serviceId"
     );
-    // Map sang trả về name, price, _id...
     const services = yachtServices.map((ys) => {
       const service = ys.serviceId;
       return {
-        _id: service._id,
-        name: service.serviceName,
+        _id: ys._id, // ID của yacht service
+        service: service.serviceName, 
         price: service.price,
-        yachtServiceId: ys._id,
+        idService: ys._id, // ID để xóa service
         yachtId: ys.yachtId,
+        // Thêm các trường khác nếu cần
+        serviceId: service._id, // ID của service gốc
+        serviceName: service.serviceName, // Giữ lại tên gốc nếu cần
       };
     });
-    res.json(services);
+    
+    res.json({
+      success: true,
+      data: services
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
-};
+}; 

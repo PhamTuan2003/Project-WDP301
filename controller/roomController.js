@@ -44,6 +44,7 @@ const getRoomsWithTypes = async (req, res) => {
       max_people: room.max_people,
       roomTypeId: room.roomTypeId,
       price: room.roomTypeId?.price || 0,
+      quantity: room.quantity || 0,
     }));
 
     res.status(200).json({
@@ -63,30 +64,31 @@ const getRoomsWithTypes = async (req, res) => {
 
 const createRoom = async (req, res) => {
   try {
-    const { name, description, area, roomTypeId, yachtId, max_people } =
-      req.body;
+    // FE gửi lên: roomName, area, description, idRoomType, avatar, idYacht, quantity
+    const { roomName, area, description, idRoomType, idYacht, quantity } = req.body;
 
-    if (!name || !area || !roomTypeId || !yachtId || !max_people) {
+    if (!roomName || !area || !idRoomType || !idYacht || !quantity) {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
+    // Lưu avatar như phần tạo yacht
     const avatar = req.file && req.file.path ? req.file.path : "";
 
-    const room = new Room({
-      name,
+    const data = new Room({
+      name: roomName,
       description,
       area,
       avatar,
-      roomTypeId,
-      yachtId,
-      max_people,
+      quantity,
+      roomTypeId: idRoomType,
+      yachtId: idYacht,
     });
 
-    await room.save();
+    await data.save();
 
     res.status(201).json({
       message: "Room created successfully",
-      room,
+      data,
     });
   } catch (error) {
     console.error("Error creating room:", error);
@@ -102,18 +104,18 @@ const createRoomType = async (req, res) => {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
-    const roomType = new RoomType({
+    const data = new RoomType({
       type,
       utility,
       price,
       yachtId,
     });
 
-    await roomType.save();
+    await data.save();
 
     res.status(201).json({
       message: "Room type created successfully",
-      roomType,
+      data,
     });
   } catch (error) {
     console.error("Error creating room type:", error);
@@ -121,4 +123,55 @@ const createRoomType = async (req, res) => {
   }
 };
 
-module.exports = { getRoomsWithTypes, createRoom, createRoomType };
+// Lấy tất cả room type theo yachtId
+const getAllRoomTypeByYachtId = async (req, res) => {
+  try {
+    const { yachtId } = req.query;
+    if (!yachtId) {
+      return res.status(400).json({
+        success: false,
+        message: "Thiếu yachtId!",
+      });
+    }
+    const roomTypes = await RoomType.find({ yachtId });
+    res.status(200).json({
+      success: true,
+      message: "Lấy danh sách loại phòng theo du thuyền thành công!",
+      data: roomTypes,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Lỗi server khi lấy loại phòng theo du thuyền!",
+      error: error.message,
+    });
+  }
+};
+
+// Lấy tất cả phòng theo yachtId
+const getAllRoomByYachtId = async (req, res) => {
+  try {
+    const { yachtId } = req.query;
+    if (!yachtId) {
+      return res.status(400).json({
+        success: false,
+        message: "Thiếu yachtId!",
+      });
+    }
+    // Populate roomTypeId để trả về thông tin loại phòng
+    const rooms = await Room.find({ yachtId }).populate('roomTypeId');
+    res.status(200).json({
+      success: true,
+      message: "Lấy danh sách phòng theo du thuyền thành công!",
+      data: rooms,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Lỗi server khi lấy phòng theo du thuyền!",
+      error: error.message,
+    });
+  }
+};
+
+module.exports = { getRoomsWithTypes, createRoom, createRoomType, getAllRoomTypeByYachtId, getAllRoomByYachtId };
