@@ -43,6 +43,7 @@ const getRoomsWithTypes = async (req, res) => {
       avatar: room.avatar,
       max_people: room.max_people,
       price: room.roomTypeId?.price || 0,
+      quantity: room.quantity || 0,
     }));
 
     res.status(200).json({
@@ -62,10 +63,10 @@ const getRoomsWithTypes = async (req, res) => {
 
 const createRoom = async (req, res) => {
   try {
-    // FE gửi lên: roomName, area, description, idRoomType, avatar, idYacht
-    const { roomName, area, description, idRoomType, idYacht } = req.body;
+    // FE gửi lên: roomName, area, description, idRoomType, avatar, idYacht, quantity
+    const { roomName, area, description, idRoomType, idYacht, quantity } = req.body;
 
-    if (!roomName || !area || !idRoomType || !idYacht) {
+    if (!roomName || !area || !idRoomType || !idYacht || !quantity) {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
@@ -77,6 +78,7 @@ const createRoom = async (req, res) => {
       description,
       area,
       avatar,
+      quantity,
       roomTypeId: idRoomType,
       yachtId: idYacht,
     });

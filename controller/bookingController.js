@@ -7,6 +7,7 @@ const {
   Yacht,
   Service,
   BookingService,
+  Room,
 } = require("../model");
 const asyncHandler = require("express-async-handler");
 const mongoose = require("mongoose");
@@ -118,6 +119,45 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
   session.startTransaction();
 
   try {
+    // Kiểm tra yacht và maxRoom
+    const yacht = await Yacht.findById(yachtId).session(session);
+    if (!yacht) {
+      await session.abortTransaction();
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy du thuyền"
+      });
+    }
+
+    // Kiểm tra tổng số phòng đặt không vượt quá maxRoom
+    const totalRoomsBooked = selectedRooms.reduce((sum, room) => sum + room.roomQuantity, 0);
+    if (yacht.maxRoom && totalRoomsBooked > yacht.maxRoom) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        success: false,
+        message: `Tổng số phòng đặt (${totalRoomsBooked}) vượt quá số phòng tối đa của du thuyền (${yacht.maxRoom})`
+      });
+    }
+
+    // Kiểm tra quantity của từng loại phòng
+    for (const roomBooking of selectedRooms) {
+      const room = await Room.findById(roomBooking.roomId).session(session);
+      if (!room) {
+        await session.abortTransaction();
+        return res.status(404).json({
+          success: false,
+          message: `Không tìm thấy phòng với id ${roomBooking.roomId}`
+        });
+      }
+      if (room.quantity && roomBooking.roomQuantity > room.quantity) {
+        await session.abortTransaction();
+        return res.status(400).json({
+          success: false,
+          message: `Số lượng đặt (${roomBooking.roomQuantity}) vượt quá số lượng có sẵn (${room.quantity}) của phòng ${room.name}`
+        });
+      }
+    }
+
     const customer = await Customer.findById(req.user.customerId).session(
       session
     );
@@ -1388,17 +1428,17 @@ exports.getAllBookingOrders = asyncHandler(async (req, res) => {
 
 // Lấy danh sách bookingOrder của company thông qua bảng Yacht (chỉ cho admin)
 exports.getBookingOrdersByCompany = asyncHandler(async (req, res) => {
-  if (!req.user || req.user.role !== 'admin') {
+  if (!req.user || req.user.role !== 'COMPANY') {
     return res.status(403).json({
       success: false,
       message: 'Bạn không có quyền truy cập!'
     });
   }
-  const { idCompany } = req.query;
-  if (!idCompany) {
+  const companyId = req.user.companyId;
+  if (!companyId) {
     return res.status(400).json({
       success: false,
-      message: 'Thiếu idCompany!'
+      message: 'Không tìm thấy thông tin công ty từ token!'
     });
   }
   const page = parseInt(req.query.page) || 1;
@@ -1406,7 +1446,7 @@ exports.getBookingOrdersByCompany = asyncHandler(async (req, res) => {
   const skip = (page - 1) * limit;
 
   // Lấy tất cả yacht thuộc công ty
-  const yachts = await Yacht.find({ IdCompanys: idCompany }).select('_id');
+  const yachts = await Yacht.find({ IdCompanys: companyId }).select('_id');
   const yachtIds = yachts.map(y => y._id);
 
   // Lấy tất cả bookingOrder có yacht thuộc danh sách trên

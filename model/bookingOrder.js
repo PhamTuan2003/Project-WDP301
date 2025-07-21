@@ -51,6 +51,7 @@ const bookingOrderSchema = new mongoose.Schema(
         "completed",
         "cancelled",
         "rejected",
+        "confirmed_deposit"
       ],
       default: "consultation_requested",
     },

@@ -53,7 +53,8 @@ const createYacht = async (req, res) => {
             itinerary,
             locationId,
             yachtTypeId,
-            IdCompanys
+            IdCompanys,
+            maxRoom
         } = req.body;
 
         // req.file.path là secure_url từ Cloudinary
@@ -71,7 +72,8 @@ const createYacht = async (req, res) => {
             itinerary,
             locationId,
             yachtTypeId,
-            IdCompanys
+            IdCompanys,
+            maxRoom
         });
 
         await yacht.save();
@@ -94,9 +96,10 @@ const updateYacht = async (req, res) => {
             hullBody,
             rule,
             itinerary,
-            location_id,
-            yachtType_id,
-            id_companys
+            locationId,
+            yachtTypeId,
+            IdCompanys,
+            maxRoom
         } = req.body;
 
         const updateData = {
@@ -106,9 +109,10 @@ const updateYacht = async (req, res) => {
             hullBody,
             rule,
             itinerary,
-            location_id,
-            yachtType_id,
-            id_companys,
+            locationId,
+            yachtTypeId,
+            IdCompanys,
+            maxRoom,
             updatedAt: Date.now()
         };
 

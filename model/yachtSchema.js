@@ -10,7 +10,7 @@ const yachtSchema = new Schema(
     hullBody: String, //thân vỏ làm bằng gì
     rule: String, //sức chứa hành khách
     itinerary: String, //lịch trình
-    price: Number, 
+    maxRoom: Number,
     locationId: { type: mongoose.Schema.Types.ObjectId, ref: "Location" }, //địa điểm du thuyền hoạt động
     yachtTypeId: { type: mongoose.Schema.Types.ObjectId, ref: "YachtType" }, //loại du thuyền
     IdCompanys: { type: mongoose.Schema.Types.ObjectId, ref: "Company" }, //công ty sở hữu hoặc điều hành du thuyền

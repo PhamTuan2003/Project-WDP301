@@ -41,4 +41,5 @@ module.exports = (app) => {
     app.use(api + '/', serviceRouter)
     app.use(api + "/yachtImages", yachtImageRouter);
     app.use(api + "/customers", customerRouter);
+    app.use(api + "/bookings", bookingRouter);
 }

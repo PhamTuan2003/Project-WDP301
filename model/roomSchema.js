@@ -6,6 +6,7 @@ const roomSchema = new Schema({
   description: String,
   area: Number,
   avatar: String,
+  quantity: Number,
   roomTypeId: { type: mongoose.Schema.Types.ObjectId, ref: 'RoomType' },
   yachtId: { type: mongoose.Schema.Types.ObjectId, ref: 'Yacht' }
 });

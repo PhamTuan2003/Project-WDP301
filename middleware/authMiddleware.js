@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const Customer = require("../model/customer");
+const Company = require("../model/company");
 
 const veryfiToken = async (req, res, next) => {
   const authHeader = req.headers["authorization"];
@@ -13,18 +14,27 @@ const veryfiToken = async (req, res, next) => {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
     req.user = payload;
 
-    const customer = await Customer.findOne({ accountId: payload._id });
-    if (!customer) {
-      return res.status(401).json({
-        success: false,
-        message: "Customer not found for this account",
-      });
+    if (payload.role === "CUSTOMER") {
+      const customer = await Customer.findOne({ accountId: payload._id });
+      if (!customer) {
+        return res.status(401).json({
+          success: false,
+          message: "Customer not found for this account",
+        });
+      }
+      req.user.customerId = customer._id.toString();
+      req.customer = customer;
+    } else if (payload.role === "COMPANY") {
+      const company = await Company.findOne({ accountId: payload._id });
+      if (!company) {
+        return res.status(401).json({
+          success: false,
+          message: "Company not found for this account",
+        });
+      }
+      req.user.companyId = company._id.toString();
+      req.company = company;
     }
-
-    // Set customerId giống như customerController return
-    req.user.customerId = customer._id.toString();
-    req.customer = customer;
-
     next();
   } catch (err) {
     res.status(401).json({ message: "Token không hợp lệ hoặc đã hết hạn" });
