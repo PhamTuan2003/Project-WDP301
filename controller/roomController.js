@@ -44,6 +44,7 @@ const getRoomsWithTypes = async (req, res) => {
       max_people: room.max_people,
       roomTypeId: room.roomTypeId,
       price: room.roomTypeId?.price || 0,
+      quantity: room.quantity, // THÊM DÒNG NÀY
     }));
 
     res.status(200).json({

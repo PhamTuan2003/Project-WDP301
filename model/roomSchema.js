@@ -19,6 +19,10 @@ const roomSchema = new Schema({
     max: 10,
     default: 2,
   },
+  quantity: {
+    type: Number,
+    required: true,
+  }, // số lượng của phòng có
   roomTypeId: { type: mongoose.Schema.Types.ObjectId, ref: "RoomType" },
   yachtId: { type: mongoose.Schema.Types.ObjectId, ref: "Yacht" },
 });

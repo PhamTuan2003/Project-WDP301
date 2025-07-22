@@ -105,6 +105,10 @@ const bookingOrderSchema = new mongoose.Schema(
       type: String,
       sparse: true,
     },
+    cancelledAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,

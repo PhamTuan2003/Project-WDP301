@@ -7,6 +7,7 @@ const {
   Yacht,
   Service,
   BookingService,
+  Schedule,
 } = require("../model");
 const asyncHandler = require("express-async-handler");
 const mongoose = require("mongoose");
@@ -350,10 +351,7 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
     });
   } catch (err) {
     await session.abortTransaction();
-    console.error(
-      "[Booking] Error in createBookingOrConsultationRequest:",
-      err
-    );
+
     return res
       .status(500)
       .json({ success: false, message: "Internal error", error: err.message });
@@ -384,7 +382,12 @@ exports.getConsultationRequest = asyncHandler(async (req, res) => {
     query.checkInDate = new Date(checkInDate);
   }
 
-  const consultation = await BookingOrder.findOne(query).lean();
+  const consultation = await BookingOrder.findOne(query)
+    .populate({
+      path: "schedule",
+      populate: { path: "scheduleId", select: "startDate endDate" },
+    })
+    .lean();
 
   if (!consultation) {
     return res.status(404).json({
@@ -403,7 +406,6 @@ exports.getConsultationRequest = asyncHandler(async (req, res) => {
       email: consultation.customerInfo.email,
       phoneNumber: consultation.customerInfo.phoneNumber,
       address: consultation.customerInfo.address || "",
-      checkInDate: consultation.checkInDate,
       guestCount: consultation.guestCount,
       adults: consultation.adults ?? 1,
       childrenUnder10: consultation.childrenUnder10 ?? 0,
@@ -412,7 +414,7 @@ exports.getConsultationRequest = asyncHandler(async (req, res) => {
       selectedRooms: consultation.consultationData.requestedRooms,
       totalPrice: consultation.consultationData.estimatedPrice,
       yachtId: consultation.yacht,
-      scheduleId: consultation.schedule || null,
+      schedule: consultation.schedule || null,
       selectedServices: consultation.consultationData.requestServices,
     },
   });
@@ -770,6 +772,47 @@ exports.confirmBooking = asyncHandler(async (req, res) => {
         });
       }
       await BookingService.insertMany(bookingServiceDocs, { session });
+    }
+
+    // Trừ số lượng phòng khi xác nhận booking
+    if (
+      booking.consultationData &&
+      booking.consultationData.requestedRooms &&
+      booking.consultationData.requestedRooms.length > 0
+    ) {
+      // Kiểm tra đủ phòng trước khi trừ
+      for (const item of booking.consultationData.requestedRooms) {
+        const room = await mongoose
+          .model("Room")
+          .findById(item.roomId)
+          .session(session);
+        if (!room) {
+          await session.abortTransaction();
+          session.endSession();
+          return res.status(404).json({
+            success: false,
+            message: `Không tìm thấy phòng với ID: ${item.roomId}`,
+          });
+        }
+        if (room.quantity < item.quantity) {
+          await session.abortTransaction();
+          session.endSession();
+          return res.status(400).json({
+            success: false,
+            message: `Không đủ phòng loại ${room.name}. Còn lại: ${room.quantity}, yêu cầu: ${item.quantity}`,
+          });
+        }
+      }
+      // Nếu đủ phòng, trừ số lượng
+      for (const item of booking.consultationData.requestedRooms) {
+        await mongoose
+          .model("Room")
+          .findByIdAndUpdate(
+            item.roomId,
+            { $inc: { quantity: -item.quantity } },
+            { session }
+          );
+      }
     }
 
     const updatedBooking = await booking.save({ session });
