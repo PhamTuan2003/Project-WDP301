@@ -248,10 +248,61 @@ async function sendCompanyRegisterEmail(to, companyName, username, password) {
   return transporter.sendMail(mailOptions);
 }
 
+// Hàm gửi email thông báo hủy booking
+async function sendCancelBookingEmail(
+  to,
+  fullName,
+  bookingCode,
+  yachtName,
+  checkInDate,
+  totalPrice
+) {
+  if (!to || !/^[\w-.]+@([\w-]+\.)+[\w-]{2,}$/.test(to)) {
+    throw new Error("Email không hợp lệ hoặc không tìm thấy email.");
+  }
+  const subject = "Thông báo hủy booking du thuyền";
+  const text = `Kính gửi ${fullName},\n\nBooking của bạn (mã: ${bookingCode}) đã được hủy theo yêu cầu.\nTên du thuyền: ${yachtName}\nNgày nhận phòng: ${checkInDate}\nTổng tiền: ${totalPrice} VNĐ\n\nNếu có thắc mắc, vui lòng liên hệ với chúng tôi.`;
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <head><meta charset=\"UTF-8\" /><title>Thông báo hủy booking du thuyền</title></head>
+      <body style=\"font-family: Arial, sans-serif; background: #f6f8fa; margin:0; padding:0;\">
+        <table width=\"100%\" bgcolor=\"#f6f8fa\" cellpadding=\"0\" cellspacing=\"0\"><tr><td>
+          <table align=\"center\" width=\"600\" style=\"background: #fff; border-radius: 10px; margin: 40px auto; box-shadow: 0 2px 8px rgba(0,0,0,0.08);\">
+            <tr><td style=\"background: #d32f2f; color: #fff; padding: 24px 32px; border-radius: 10px 10px 0 0; text-align: center;\"><h2 style=\"margin: 0;\">THÔNG BÁO HỦY BOOKING DU THUYỀN</h2></td></tr>
+            <tr><td style=\"padding: 32px;\">
+              <p>Xin chào <b>${fullName}</b>,</p>
+              <p>Booking của bạn đã được <b>hủy thành công</b> theo yêu cầu.</p>
+              <table style=\"width:100%; margin: 24px 0; background: #ffebee; border-radius: 8px;\"><tr><td style=\"padding: 12px 16px;\">
+                <b>Mã booking:</b> <span style=\"color:#d32f2f;\">${bookingCode}</span><br/>
+                <b>Tên du thuyền:</b> ${yachtName}<br/>
+                <b>Ngày nhận phòng:</b> ${checkInDate}<br/>
+                <b>Tổng tiền:</b> ${totalPrice} VNĐ<br/>
+              </td></tr></table>
+              <p>Nếu bạn có bất kỳ thắc mắc nào, vui lòng liên hệ với chúng tôi qua email này hoặc số hotline <b>0123 456 789</b>.</p>
+              <p style=\"margin-top: 32px;\">Trân trọng,<br/>Đội ngũ WDP Yacht</p>
+            </td></tr>
+            <tr><td style=\"background: #ffebee; color: #888; padding: 16px 32px; border-radius: 0 0 10px 10px; text-align: center; font-size: 13px;\">© 2024 WDP Yacht. All rights reserved.</td></tr>
+          </table>
+        </td></tr></table>
+      </body>
+    </html>
+  `;
+  const mailOptions = {
+    from: process.env.EMAIL_USER,
+    to,
+    subject,
+    text,
+    html,
+  };
+  return transporter.sendMail(mailOptions);
+}
+
 module.exports = {
   sendBookingConfirmationEmail,
   sendConsultationEmail,
   testSendMail,
   sendOTP,
   sendCompanyRegisterEmail,
+  sendCancelBookingEmail, // Thêm export hàm mới
 };

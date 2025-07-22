@@ -245,6 +245,43 @@ const processSuccessfulPayment = async (transaction, session) => {
       );
       bookingRoomsCreated = true;
     }
+    // Thêm logic trừ số lượng phòng khi xác nhận booking
+    if (
+      booking.consultationData &&
+      booking.consultationData.requestedRooms &&
+      booking.consultationData.requestedRooms.length > 0
+    ) {
+      for (const item of booking.consultationData.requestedRooms) {
+        const room = await mongoose
+          .model("Room")
+          .findById(item.roomId)
+          .session(session);
+        console.log(
+          "[DEBUG][PAYMENT] Tìm room:",
+          item.roomId,
+          "=>",
+          room ? "Tìm thấy" : "KHÔNG tìm thấy",
+          "quantity:",
+          room ? room.quantity : "N/A"
+        );
+        if (!room) {
+          throw new Error(`Không tìm thấy phòng với ID: ${item.roomId}`);
+        }
+        if (room.quantity < item.quantity) {
+          throw new Error(
+            `Không đủ phòng loại ${room.name}. Còn lại: ${room.quantity}, yêu cầu: ${item.quantity}`
+          );
+        }
+        const updatedRoom = await mongoose
+          .model("Room")
+          .findByIdAndUpdate(
+            item.roomId,
+            { $inc: { quantity: -item.quantity } },
+            { session, new: true }
+          );
+        console.log("[DEBUG][PAYMENT] Sau khi trừ phòng:", updatedRoom);
+      }
+    }
   }
   await booking.save({ session });
 

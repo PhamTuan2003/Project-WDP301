@@ -786,6 +786,14 @@ exports.confirmBooking = asyncHandler(async (req, res) => {
           .model("Room")
           .findById(item.roomId)
           .session(session);
+        console.log(
+          "[DEBUG] Tìm room:",
+          item.roomId,
+          "=>",
+          room ? "Tìm thấy" : "KHÔNG tìm thấy",
+          "quantity:",
+          room ? room.quantity : "N/A"
+        );
         if (!room) {
           await session.abortTransaction();
           session.endSession();
@@ -803,16 +811,7 @@ exports.confirmBooking = asyncHandler(async (req, res) => {
           });
         }
       }
-      // Nếu đủ phòng, trừ số lượng
-      for (const item of booking.consultationData.requestedRooms) {
-        await mongoose
-          .model("Room")
-          .findByIdAndUpdate(
-            item.roomId,
-            { $inc: { quantity: -item.quantity } },
-            { session }
-          );
-      }
+      // Nếu đủ phòng, KHÔNG trừ số lượng ở đây nữa (chuyển sang paymentController)
     }
 
     const updatedBooking = await booking.save({ session });
@@ -1457,9 +1456,42 @@ exports.customerCancelBooking = asyncHandler(async (req, res) => {
       }
     }
 
+    // Lưu trạng thái cũ trước khi cập nhật
+    const oldStatus = booking.status;
     booking.status = "cancelled";
 
     const updatedBooking = await booking.save({ session });
+
+    // Gửi email nếu trạng thái cũ là confirmed hoặc confirmed_deposit
+    if (["confirmed", "confirmed_deposit"].includes(oldStatus)) {
+      try {
+        // Populate yacht name nếu cần
+        await booking.populate("yacht");
+        const to = booking.customerInfo?.email;
+        const fullName = booking.customerInfo?.fullName || "Khách hàng";
+        const bookingCode = booking.bookingCode;
+        const yachtName = booking.yacht?.name || "Du thuyền";
+        const checkInDate = booking.checkInDate
+          ? new Date(booking.checkInDate).toLocaleDateString("vi-VN")
+          : "-";
+        const totalPrice =
+          booking.paymentBreakdown?.totalAmount?.toLocaleString("vi-VN") || "-";
+        if (to) {
+          const { sendCancelBookingEmail } = require("../utils/sendMail");
+          await sendCancelBookingEmail(
+            to,
+            fullName,
+            bookingCode,
+            yachtName,
+            checkInDate,
+            totalPrice
+          );
+        }
+      } catch (e) {
+        console.error("Lỗi gửi email hủy booking:", e);
+      }
+    }
+
     await session.commitTransaction();
     session.endSession();
 
