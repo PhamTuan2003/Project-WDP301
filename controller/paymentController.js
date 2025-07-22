@@ -185,36 +185,40 @@ const processSuccessfulPayment = async (transaction, session) => {
 
   let newTotalPaid =
     (booking.paymentBreakdown.totalPaid || 0) + transaction.amount;
-  newTotalPaid = Math.min(newTotalPaid, booking.paymentBreakdown.totalAmount); // Đảm bảo totalPaid không vượt quá totalAmount
+  newTotalPaid = Math.min(newTotalPaid, booking.amount); // Đảm bảo totalPaid không vượt quá totalAmount
 
   booking.paymentBreakdown.totalPaid = newTotalPaid;
-  // booking.paymentBreakdown.remainingAmount sẽ được pre-save hook của BookingOrder tính lại, hoặc ta tự tính:
-  booking.paymentBreakdown.remainingAmount =
-    booking.paymentBreakdown.totalAmount - newTotalPaid;
+  booking.paymentBreakdown.remainingAmount = booking.amount - newTotalPaid;
 
   if (transaction.transaction_type === "deposit") {
     booking.paymentStatus = "deposit_paid";
+    booking.status = "confirmed_deposit";
   } else if (
     transaction.transaction_type === "full_payment" ||
     transaction.transaction_type === "final_payment"
   ) {
     if (booking.paymentBreakdown.remainingAmount <= 0) {
       booking.paymentStatus = "fully_paid";
+      // Nếu trước đó là confirmed_deposit thì chuyển sang confirmed
+      if (booking.status === "confirmed_deposit") {
+        booking.status = "confirmed";
+      }
     } else {
-      // Nếu đã cọc, thì vẫn là deposit_paid (chưa trả hết final)
       booking.paymentStatus =
         booking.paymentStatus === "deposit_paid" ? "deposit_paid" : "unpaid";
     }
   }
 
   let bookingRoomsCreated = false;
-  // Nếu booking đang 'pending_payment' và đã thanh toán (cọc hoặc đủ) thì xác nhận booking
   if (
     booking.status === "pending_payment" &&
     (booking.paymentStatus === "deposit_paid" ||
       booking.paymentStatus === "fully_paid")
   ) {
     booking.status = "confirmed";
+    // booking.confirmedAt và booking.confirmationCode sẽ được Hook của BookingOrder xử lý khi status là 'confirmed'
+
+    // Tạo BookingRoom entries từ consultationData.requestedRooms sau khi booking được confirmed
     const existingBookingRooms = await BookingRoom.find({
       bookingId: booking._id,
     }).session(session);
@@ -236,9 +240,6 @@ const processSuccessfulPayment = async (transaction, session) => {
         }
       );
       await Promise.all(bookingRoomPromises);
-      console.log(
-        `BookingRooms đã được tạo cho BookingOrder ${booking._id} khi xác nhận.`
-      );
       bookingRoomsCreated = true;
     }
   }

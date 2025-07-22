@@ -32,16 +32,3 @@ module.exports = (app) => {
   app.use(api + "/account-companies", accountCompanyRouter);
   app.use(api + "/admin", adminRouter);
 };
-
-// module.exports = (app) => {
-//     const api = "/api";
-//     app.use(api + '/companies/yacht', yachtRouter)
-//     app.use(api + '/rooms', roomRouter)
-//     app.use(api + '/company', companyRouter)
-//     app.use(api + '/companies', locationRouter)
-//     app.use(api + '/companies', yachtTypeRouter)
-//     app.use(api + '/', serviceRouter)
-//     app.use(api + "/yachtImages", yachtImageRouter);
-//     app.use(api + "/customers", customerRouter);
-//     app.use(api + "/bookings", bookingRouter);
-// }

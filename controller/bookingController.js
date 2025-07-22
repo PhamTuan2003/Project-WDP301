@@ -1589,15 +1589,144 @@ exports.getBookingOrdersByCompany = asyncHandler(async (req, res) => {
     .populate('customer', 'fullName email phoneNumber')
     .populate('yacht', 'name')
     .populate('schedule', 'startDate endDate')
+    .populate({
+      path: 'consultationData.requestedRooms.roomId',
+      select: 'name description area avatar max_people roomTypeId yachtId',
+      populate: { path: 'roomTypeId', select: 'type utility price' }
+    })
+    .populate({
+      path: 'schedule',
+      populate: {
+        path: 'scheduleId',
+        select: 'startDate endDate'
+      }
+    })
+    .populate({
+      path: 'consultationData.requestServices.serviceId',
+      select: 'serviceName price'
+    })
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(limit);
+
+  // Đảm bảo mỗi booking đều có _id khi trả về
+  const dataWithId = data.map(item => ({
+    _id: item._id,
+    ...item.toObject()
+  }));
 
   res.status(200).json({
     success: true,
     total,
     page,
     limit,
-    data
+    data: dataWithId
   });
+});
+
+exports.companyCompleteBooking = asyncHandler(async (req, res) => {
+  const { bookingId } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+    return res.status(400).json({ success: false, message: "Booking ID không hợp lệ." });
+  }
+  if (!req.user || req.user.role !== 'COMPANY') {
+    return res.status(403).json({ success: false, message: "Bạn không có quyền xác nhận hoàn thành booking này." });
+  }
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    const booking = await BookingOrder.findById(bookingId).session(session);
+    if (!booking) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ success: false, message: "Booking không tồn tại." });
+    }
+    // Chỉ cho phép hoàn thành nếu đã fully_paid và status là confirmed hoặc confirmed_deposit
+    if (booking.paymentStatus !== 'fully_paid' || !['confirmed', 'confirmed_deposit'].includes(booking.status)) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ success: false, message: "Booking chưa đủ điều kiện để hoàn thành (phải đã thanh toán đủ và đã xác nhận)." });
+    }
+    booking.status = 'completed';
+    await booking.save({ session });
+    await session.commitTransaction();
+    session.endSession();
+    res.status(200).json({ success: true, message: "Booking đã được xác nhận hoàn thành.", data: booking });
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    res.status(500).json({ success: false, message: "Lỗi server khi xác nhận hoàn thành booking.", error: error.message });
+  }
+});
+
+exports.companyCancelBooking = asyncHandler(async (req, res) => {
+  const { bookingId } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+    return res.status(400).json({ success: false, message: "Booking ID không hợp lệ." });
+  }
+  if (!req.user || req.user.role !== 'COMPANY') {
+    return res.status(403).json({ success: false, message: "Bạn không có quyền huỷ booking này." });
+  }
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    const booking = await BookingOrder.findById(bookingId).session(session);
+    if (!booking) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ success: false, message: "Booking không tồn tại." });
+    }
+    // Chỉ cho phép huỷ nếu đã qua thời gian checkin
+    const now = new Date();
+    if (!booking.checkInDate || now < new Date(booking.checkInDate)) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ success: false, message: "Chỉ được huỷ booking sau thời gian checkin nếu khách không đến." });
+    }
+    booking.status = 'rejected';
+    await booking.save({ session });
+    await session.commitTransaction();
+    session.endSession();
+    res.status(200).json({ success: true, message: "Booking đã được huỷ bởi company (rejected).", data: booking });
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    res.status(500).json({ success: false, message: "Lỗi server khi huỷ booking.", error: error.message });
+  }
+});
+
+exports.confirmFullPayment = asyncHandler(async (req, res) => {
+  const { bookingId } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+    return res.status(400).json({ success: false, message: "Booking ID không hợp lệ." });
+  }
+  // Có thể kiểm tra quyền ở đây nếu cần (admin, thu ngân, ...)
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    const booking = await BookingOrder.findById(bookingId).session(session);
+    if (!booking) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ success: false, message: "Booking không tồn tại." });
+    }
+    if (booking.status !== 'confirmed_deposit' || booking.paymentStatus !== 'deposit_paid') {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ success: false, message: "Chỉ xác nhận khi booking đang ở trạng thái đặt cọc." });
+    }
+    booking.paymentStatus = 'fully_paid';
+    booking.status = 'confirmed';
+    booking.paymentBreakdown.totalPaid = booking.paymentBreakdown.totalAmount;
+    booking.paymentBreakdown.remainingAmount = 0;
+    await booking.save({ session });
+    await session.commitTransaction();
+    session.endSession();
+    res.status(200).json({ success: true, message: "Đã xác nhận thanh toán đủ, booking chuyển sang confirmed.", data: booking });
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    res.status(500).json({ success: false, message: "Lỗi server khi xác nhận thanh toán đủ.", error: error.message });
+    console.error("Error confirming full payment:", error);
+  }
 });

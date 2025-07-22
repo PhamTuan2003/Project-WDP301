@@ -15,6 +15,9 @@ const {
   updateBookingOrConsultationRequest,
   cancelConsultationRequest,
   deleteBookingOrder,
+  companyCompleteBooking,
+  companyCancelBooking,
+  confirmFullPayment,
 } = bookingController;
 const { veryfiToken } = require("../middleware/authMiddleware");
 const { testSendMail } = require("../utils/sendMail");
@@ -31,6 +34,9 @@ router.put("/:bookingId/cancel", veryfiToken, customerCancelBooking);
 router.get("/available-rooms", getRooms);
 router.put("/customer/my-info", veryfiToken, updateCustomerInfo);
 router.delete("/:bookingId", veryfiToken, deleteBookingOrder);
+router.put("/company/:bookingId/complete", veryfiToken, companyCompleteBooking);
+router.put("/company/:bookingId/cancel", veryfiToken, companyCancelBooking);
+router.put("/:bookingId/confirm-full-payment", confirmFullPayment);
 // Route test gửi email
 router.get("/test-send-mail", async (req, res) => {
   const { to } = req.query;
