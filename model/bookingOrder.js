@@ -34,7 +34,7 @@ const bookingOrderSchema = new mongoose.Schema(
         "confirmed_deposit",
         "cancelled",
         "rejected",
-        "confirmed_deposit"
+        "confirmed_deposit",
       ],
       default: "consultation_requested",
     },
@@ -122,6 +122,10 @@ const bookingOrderSchema = new mongoose.Schema(
 
 // Middleware để tạo codes và tính toán
 bookingOrderSchema.pre("save", function (next) {
+  // Nếu chưa có checkInDate, lấy từ startDate (nếu có)
+  if (!this.checkInDate && this.startDate) {
+    this.checkInDate = this.startDate;
+  }
   // Tạo booking code nếu chưa có
   if (!this.bookingCode) {
     const prefix = "BK";
