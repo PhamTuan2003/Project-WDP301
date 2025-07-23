@@ -255,13 +255,19 @@ async function sendCancelBookingEmail(
   bookingCode,
   yachtName,
   checkInDate,
-  totalPrice
+  totalPrice,
+  depositAmount // Thêm tham số mới
 ) {
   if (!to || !/^[\w-.]+@([\w-]+\.)+[\w-]{2,}$/.test(to)) {
     throw new Error("Email không hợp lệ hoặc không tìm thấy email.");
   }
   const subject = "Thông báo hủy booking du thuyền";
-  const text = `Kính gửi ${fullName},\n\nBooking của bạn (mã: ${bookingCode}) đã được hủy theo yêu cầu.\nTên du thuyền: ${yachtName}\nNgày nhận phòng: ${checkInDate}\nTổng tiền: ${totalPrice} VNĐ\n\nNếu có thắc mắc, vui lòng liên hệ với chúng tôi.`;
+  const text = `Kính gửi ${fullName},\n\nBooking của bạn (mã: ${bookingCode}) đã được hủy theo yêu cầu.\nTên du thuyền: ${yachtName}\nNgày nhận phòng: ${checkInDate}\nTổng tiền: ${totalPrice} VNĐ${
+    depositAmount ? `\nSố tiền đã thanh toán trước: ${depositAmount} VNĐ` : ""
+  }\n\nNếu có thắc mắc, vui lòng liên hệ với chúng tôi.`;
+  const depositHtml = depositAmount
+    ? `<b>Số tiền đã thanh toán trước:</b> ${depositAmount} VNĐ<br/>`
+    : "";
   const html = `
     <!DOCTYPE html>
     <html>
@@ -278,6 +284,7 @@ async function sendCancelBookingEmail(
                 <b>Tên du thuyền:</b> ${yachtName}<br/>
                 <b>Ngày nhận phòng:</b> ${checkInDate}<br/>
                 <b>Tổng tiền:</b> ${totalPrice} VNĐ<br/>
+                ${depositHtml}
               </td></tr></table>
               <p>Nếu bạn có bất kỳ thắc mắc nào, vui lòng liên hệ với chúng tôi qua email này hoặc số hotline <b>0123 456 789</b>.</p>
               <p style=\"margin-top: 32px;\">Trân trọng,<br/>Đội ngũ WDP Yacht</p>

@@ -183,12 +183,17 @@ const processSuccessfulPayment = async (transaction, session) => {
       `Booking ${transaction.bookingId} không tìm thấy cho giao dịch ${transaction._id}`
     );
 
-  let newTotalPaid =
-    (booking.paymentBreakdown.totalPaid || 0) + transaction.amount;
-  newTotalPaid = Math.min(newTotalPaid, booking.amount); // Đảm bảo totalPaid không vượt quá totalAmount
+  // Ép kiểu về số và fallback về 0 nếu không hợp lệ
+  const bookingAmount =
+    Number(booking.amount) || Number(booking.paymentBreakdown.totalAmount) || 0;
+  const prevTotalPaid = Number(booking.paymentBreakdown.totalPaid) || 0;
+  const transactionAmount = Number(transaction.amount) || 0;
+
+  let newTotalPaid = prevTotalPaid + transactionAmount;
+  newTotalPaid = Math.min(newTotalPaid, bookingAmount);
 
   booking.paymentBreakdown.totalPaid = newTotalPaid;
-  booking.paymentBreakdown.remainingAmount = booking.amount - newTotalPaid;
+  booking.paymentBreakdown.remainingAmount = bookingAmount - newTotalPaid;
 
   if (transaction.transaction_type === "deposit") {
     booking.paymentStatus = "deposit_paid";
@@ -254,14 +259,6 @@ const processSuccessfulPayment = async (transaction, session) => {
           .model("Room")
           .findById(item.roomId)
           .session(session);
-        console.log(
-          "[DEBUG][PAYMENT] Tìm room:",
-          item.roomId,
-          "=>",
-          room ? "Tìm thấy" : "KHÔNG tìm thấy",
-          "quantity:",
-          room ? room.quantity : "N/A"
-        );
         if (!room) {
           throw new Error(`Không tìm thấy phòng với ID: ${item.roomId}`);
         }
@@ -270,14 +267,13 @@ const processSuccessfulPayment = async (transaction, session) => {
             `Không đủ phòng loại ${room.name}. Còn lại: ${room.quantity}, yêu cầu: ${item.quantity}`
           );
         }
-        const updatedRoom = await mongoose
+        await mongoose
           .model("Room")
           .findByIdAndUpdate(
             item.roomId,
             { $inc: { quantity: -item.quantity } },
             { session, new: true }
           );
-        console.log("[DEBUG][PAYMENT] Sau khi trừ phòng:", updatedRoom);
       }
     }
   }

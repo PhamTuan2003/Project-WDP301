@@ -32,11 +32,6 @@ const parseGuestCount = (guestCountValue) => {
 
 // ==================== BOOKING ROOM FUNCTIONS ====================
 exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
-  // Thêm log dữ liệu đầu vào để debug
-  console.log(
-    "[DEBUG] /bookings/request req.body:",
-    JSON.stringify(req.body, null, 2)
-  );
   const {
     yachtId,
     scheduleId,
@@ -246,7 +241,7 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
       yacht: yachtId,
       schedule: scheduleId || null,
       status: requestType,
-      requirements: requirements || "",
+      requirements: requirements || "", // vẫn lưu ở đây nếu cần backward compatibility
       guestCount: totalGuestCount,
       adults: req.body.adults ?? 1,
       childrenUnder10: req.body.childrenUnder10 ?? 0,
@@ -257,7 +252,7 @@ exports.createBookingOrConsultationRequest = asyncHandler(async (req, res) => {
         // các trường khác để mặc định
       },
       consultationData: {
-        notes: req.body.consultationData?.notes || "",
+        requirements: requirements || "", // Lưu requirements vào đúng trường trong consultationData
         respondedAt: req.body.consultationData?.respondedAt || null,
         requestedRooms: processedRooms || [],
         requestServices: processedServices || [],
@@ -607,7 +602,7 @@ exports.updateBookingStatus = asyncHandler(async (req, res) => {
 
   const validStatuses = [
     "consultation_requested",
-    "consultation_sent", // Added from BookingOrder schema
+    "consultation_sent",
     "confirmed",
     "completed",
     "cancelled",
@@ -659,6 +654,44 @@ exports.updateBookingStatus = asyncHandler(async (req, res) => {
 
     const oldStatus = booking.status;
     booking.status = status;
+
+    // === CẬP NHẬT SỐ LƯỢNG PHÒNG ===
+    // Trừ phòng khi sang confirmed/confirmed_deposit
+    if (
+      ["confirmed", "confirmed_deposit"].includes(status) &&
+      !["confirmed", "confirmed_deposit"].includes(oldStatus)
+    ) {
+      const rooms = booking.consultationData?.requestedRooms || [];
+      for (const room of rooms) {
+        const roomId = room.roomId?._id || room.roomId;
+        const qty = room.quantity || 1;
+        if (roomId) {
+          await Room.findByIdAndUpdate(
+            roomId,
+            { $inc: { quantity: -qty } },
+            { session }
+          );
+        }
+      }
+    }
+    // Cộng lại phòng khi sang cancelled từ confirmed/confirmed_deposit
+    if (
+      status === "cancelled" &&
+      ["confirmed", "confirmed_deposit"].includes(oldStatus)
+    ) {
+      const rooms = booking.consultationData?.requestedRooms || [];
+      for (const room of rooms) {
+        const roomId = room.roomId?._id || room.roomId;
+        const qty = room.quantity || 1;
+        if (roomId) {
+          await Room.findByIdAndUpdate(
+            roomId,
+            { $inc: { quantity: qty } },
+            { session }
+          );
+        }
+      }
+    }
 
     if (status === "confirmed") {
       if (scheduleId) booking.schedule = scheduleId; // Update schedule if provided
@@ -763,6 +796,22 @@ exports.confirmBooking = asyncHandler(async (req, res) => {
       booking.schedule = scheduleId;
     }
     // booking.confirmedAt and booking.confirmationCode will be set by pre-save hook in BookingOrder model
+
+    // === CẬP NHẬT SỐ LƯỢNG PHÒNG ===
+    if (["confirmed", "confirmed_deposit"].includes(booking.status)) {
+      const rooms = booking.consultationData?.requestedRooms || [];
+      for (const room of rooms) {
+        const roomId = room.roomId?._id || room.roomId;
+        const qty = room.quantity || 1;
+        if (roomId) {
+          await Room.findByIdAndUpdate(
+            roomId,
+            { $inc: { quantity: -qty } },
+            { session }
+          );
+        }
+      }
+    }
 
     // Create BookingRoom entries from consultationData.requestedRooms
     const existingBookingRooms = await BookingRoom.find({
@@ -1020,6 +1069,8 @@ exports.updateBookingOrConsultationRequest = asyncHandler(async (req, res) => {
       // Không lưu price/serviceName
     }));
     bookingOrder.consultationData.estimatedPrice = totalPrice || 0;
+    // Cập nhật requirements vào consultationData (theo model)
+    bookingOrder.consultationData.requirements = requirements || "";
     const savedBookingOrder = await bookingOrder.save({ session });
 
     // Nếu chuyển sang pending_payment, cập nhật lại BookingRoom
@@ -1461,6 +1512,54 @@ exports.customerCancelBooking = asyncHandler(async (req, res) => {
     booking.status = "cancelled";
 
     const updatedBooking = await booking.save({ session });
+
+    // Gửi email thông báo hủy booking cho khách hàng
+    try {
+      // Lấy thông tin du thuyền nếu chưa có
+      let yachtName = "";
+      if (booking.yacht && booking.yacht.name) {
+        yachtName = booking.yacht.name;
+      } else {
+        // Populate yacht nếu chưa có tên
+        const yachtDoc = await mongoose.model("Yacht").findById(booking.yacht);
+        yachtName = yachtDoc?.name || "Du thuyền";
+      }
+      // Lấy thông tin khách hàng
+      const email = booking.customerInfo?.email;
+      const fullName = booking.customerInfo?.fullName || "Khách hàng";
+      const bookingCode = booking.bookingCode || booking._id?.toString();
+      const checkInDate = booking.checkInDate
+        ? new Date(booking.checkInDate).toLocaleDateString("vi-VN")
+        : "-";
+      const totalPrice =
+        booking.paymentBreakdown?.totalAmount?.toLocaleString("vi-VN") || "-";
+      // Lấy số tiền đã đặt cọc nếu có
+      let depositAmount = undefined;
+      if (
+        booking.status === "confirmed_deposit" ||
+        booking.paymentBreakdown?.depositAmount > 0
+      ) {
+        depositAmount =
+          booking.paymentBreakdown.depositAmount?.toLocaleString("vi-VN");
+      }
+      // Gửi mail nếu có email
+      if (email) {
+        const { sendCancelBookingEmail } = require("../utils/sendMail");
+        await sendCancelBookingEmail(
+          email,
+          fullName,
+          bookingCode,
+          yachtName,
+          checkInDate,
+          totalPrice,
+          depositAmount
+        );
+      }
+    } catch (mailErr) {
+      // Không throw lỗi gửi mail, chỉ log
+      console.error("[Booking] Lỗi gửi email hủy booking:", mailErr);
+    }
+
     await session.commitTransaction();
     session.endSession();
 
