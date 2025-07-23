@@ -216,13 +216,21 @@ const processSuccessfulPayment = async (transaction, session) => {
 
   let bookingRoomsCreated = false;
   if (
-    booking.status === "pending_payment" &&
+    (booking.status === "pending_payment" ||
+      booking.status === "confirmed_deposit" ||
+      booking.status === "confirmed") &&
     (booking.paymentStatus === "deposit_paid" ||
       booking.paymentStatus === "fully_paid")
   ) {
-    if (booking.paymentStatus === "deposit_paid") {
+    if (
+      booking.status === "pending_payment" &&
+      booking.paymentStatus === "deposit_paid"
+    ) {
       booking.status = "confirmed_deposit";
-    } else if (booking.paymentStatus === "fully_paid") {
+    } else if (
+      booking.status === "pending_payment" &&
+      booking.paymentStatus === "fully_paid"
+    ) {
       booking.status = "confirmed";
     }
     const existingBookingRooms = await BookingRoom.find({
@@ -254,6 +262,9 @@ const processSuccessfulPayment = async (transaction, session) => {
       booking.consultationData.requestedRooms &&
       booking.consultationData.requestedRooms.length > 0
     ) {
+      console.log(
+        `DEBUG: Chuẩn bị trừ số lượng phòng cho bookingId: ${booking._id}, trạng thái: ${booking.status}, paymentStatus: ${booking.paymentStatus}`
+      );
       for (const item of booking.consultationData.requestedRooms) {
         const room = await mongoose
           .model("Room")
@@ -267,6 +278,9 @@ const processSuccessfulPayment = async (transaction, session) => {
             `Không đủ phòng loại ${room.name}. Còn lại: ${room.quantity}, yêu cầu: ${item.quantity}`
           );
         }
+        console.log(
+          `DEBUG: Trừ phòng - roomId: ${item.roomId}, roomName: ${room.name}, quantity bị trừ: ${item.quantity}, quantity còn lại trước khi trừ: ${room.quantity}`
+        );
         await mongoose
           .model("Room")
           .findByIdAndUpdate(
@@ -275,6 +289,10 @@ const processSuccessfulPayment = async (transaction, session) => {
             { session, new: true }
           );
       }
+      // Đánh dấu đã trừ phòng
+      booking.truPhong = true;
+      await booking.save({ session });
+      console.log("DEBUG: Đã set truPhong = true cho booking:", booking._id);
     }
   }
   await booking.save({ session });
