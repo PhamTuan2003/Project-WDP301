@@ -98,6 +98,7 @@ const bookingOrderSchema = new mongoose.Schema(
         default: "",
       },
     },
+    truPhong: { type: Boolean, default: false },
     transactionId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Transaction",

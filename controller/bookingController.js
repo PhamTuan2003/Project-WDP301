@@ -656,28 +656,14 @@ exports.updateBookingStatus = asyncHandler(async (req, res) => {
     booking.status = status;
 
     // === CẬP NHẬT SỐ LƯỢNG PHÒNG ===
-    // Trừ phòng khi sang confirmed/confirmed_deposit
-    if (
-      ["confirmed", "confirmed_deposit"].includes(status) &&
-      !["confirmed", "confirmed_deposit"].includes(oldStatus)
-    ) {
-      const rooms = booking.consultationData?.requestedRooms || [];
-      for (const room of rooms) {
-        const roomId = room.roomId?._id || room.roomId;
-        const qty = room.quantity || 1;
-        if (roomId) {
-          await Room.findByIdAndUpdate(
-            roomId,
-            { $inc: { quantity: -qty } },
-            { session }
-          );
-        }
-      }
-    }
-    // Cộng lại phòng khi sang cancelled từ confirmed/confirmed_deposit
+    // Đã đồng bộ: Logic trừ phòng chỉ thực hiện ở paymentController khi thanh toán thành công.
+    // (Đoạn code trừ phòng ở đây đã được xoá để tránh double booking)
+    // Cộng lại phòng khi sang cancelled từ confirmed/confirmed_deposit với paymentStatus phù hợp
     if (
       status === "cancelled" &&
-      ["confirmed", "confirmed_deposit"].includes(oldStatus)
+      ((oldStatus === "confirmed" && booking.paymentStatus === "full_paid") ||
+        (oldStatus === "confirmed_deposit" &&
+          booking.paymentStatus === "deposit_paid"))
     ) {
       const rooms = booking.consultationData?.requestedRooms || [];
       for (const room of rooms) {
@@ -798,7 +784,13 @@ exports.confirmBooking = asyncHandler(async (req, res) => {
     // booking.confirmedAt and booking.confirmationCode will be set by pre-save hook in BookingOrder model
 
     // === CẬP NHẬT SỐ LƯỢNG PHÒNG ===
-    if (["confirmed", "confirmed_deposit"].includes(booking.status)) {
+    // Chỉ trừ phòng khi status và paymentStatus phù hợp
+    if (
+      (booking.status === "confirmed" &&
+        booking.paymentStatus === "full_paid") ||
+      (booking.status === "confirmed_deposit" &&
+        booking.paymentStatus === "deposit_paid")
+    ) {
       const rooms = booking.consultationData?.requestedRooms || [];
       for (const room of rooms) {
         const roomId = room.roomId?._id || room.roomId;
@@ -1507,6 +1499,39 @@ exports.customerCancelBooking = asyncHandler(async (req, res) => {
             "Chỉ có thể hủy booking đã xác nhận trước ngày nhận phòng 1 ngày.",
         });
       }
+    }
+
+    // DEBUG trạng thái booking trước khi cộng lại phòng
+    console.log("DEBUG: Trước khi cộng lại phòng:", {
+      status: booking.status,
+      paymentStatus: booking.paymentStatus,
+      truPhong: booking.truPhong,
+      bookingId: booking._id,
+    });
+    // Cộng lại phòng nếu booking ở trạng thái confirmed hoặc confirmed_deposit và đã từng trừ phòng
+    if (
+      ["confirmed", "confirmed_deposit"].includes(booking.status) &&
+      (booking.paymentStatus === "fully_paid" ||
+        booking.paymentStatus === "deposit_paid") &&
+      booking.truPhong
+    ) {
+      const rooms = booking.consultationData?.requestedRooms || [];
+      for (const room of rooms) {
+        const roomId = room.roomId?._id || room.roomId;
+        const qty = room.quantity || 1;
+        if (roomId) {
+          await Room.findByIdAndUpdate(
+            roomId,
+            { $inc: { quantity: qty } },
+            { session }
+          );
+          console.log(
+            `DEBUG: Cộng lại phòng - roomId: ${roomId}, quantity cộng lại: ${qty}`
+          );
+        }
+      }
+      booking.truPhong = false;
+      await booking.save({ session });
     }
 
     booking.status = "cancelled";
