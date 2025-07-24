@@ -2,6 +2,7 @@ const Room = require("../model/roomSchema");
 const BookingRoom = require("../model/bookingRoom");
 const BookingOrder = require("../model/bookingOrder");
 const RoomType = require("../model/roomType");
+const Yacht = require("../model/yachtSchema");
 
 const getRoomsWithTypes = async (req, res) => {
   try {
@@ -158,12 +159,16 @@ const getAllRoomByYachtId = async (req, res) => {
         message: "Thiếu yachtId!",
       });
     }
+    const yacht = await Yacht.findById(yachtId);
     // Populate roomTypeId để trả về thông tin loại phòng
     const rooms = await Room.find({ yachtId }).populate('roomTypeId');
     res.status(200).json({
       success: true,
       message: "Lấy danh sách phòng theo du thuyền thành công!",
-      data: rooms,
+      data: {
+        rooms,
+        maxRoom: yacht.maxRoom,
+      }
     });
   } catch (error) {
     res.status(500).json({

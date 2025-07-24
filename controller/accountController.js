@@ -59,6 +59,7 @@ const login = async (req, res) => {
         message: "Đăng nhập thành công",
         token,
         idAccount: account._id,
+        idCompany: idCompany, // Thêm dòng này để trả về idCompany nếu có
         customer, // trả về luôn object customer
       },
     });
