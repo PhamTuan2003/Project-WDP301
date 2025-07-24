@@ -44,17 +44,30 @@ const veryfiToken = async (req, res, next) => {
     return res.status(401).json({ success: false, message: "Token không hợp lệ" });
   }
 };
-// const adminProtect = (req, res, next) => {
-//   if (req.user && req.user.role === "admin") {
-//     // Assuming 'role' field in UserAccount model
-//     next();
-//   } else {
-//     res
-//       .status(403)
-//       .json({ success: false, message: "Not authorized as an admin" });
-//   }
-// };
+
+// Middleware để bảo vệ các route chỉ cho phép admin truy cập
+const verifyAdminToken = (req, res, next) => {
+  const authHeader = req.headers["authorization"];
+  if (!authHeader) return res.status(401).json({ message: "Không có Token" });
+
+  const token = authHeader.split(" ")[1];
+  if (!token) return res.status(401).json({ message: "Token không đúng định dạng" });
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (decoded.role !== "ADMIN") {
+      return res.status(403).json({ message: "Không có quyền admin" });
+    }
+
+    req.user = decoded;
+    next();
+  } catch (err) {
+    console.error("❌ Admin token error:", err);
+    return res.status(401).json({ message: "Token không hợp lệ" });
+  }
+};
+
 module.exports = {
   veryfiToken,
-  // adminProtect,
+  verifyAdminToken,
 };
