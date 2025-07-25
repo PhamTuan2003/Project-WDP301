@@ -1190,7 +1190,7 @@ exports.getBookingWithTransactions = asyncHandler(async (req, res) => {
   try {
     const booking = await BookingOrder.findById(id)
       .populate("customer", "fullName phoneNumber email address") // Added address
-      .populate("yacht", "name images location")
+      .populate("yacht", "name image location")
       .populate("schedule", "startDate endDate");
 
     if (!booking) {
@@ -1264,7 +1264,7 @@ exports.getCustomerBookings = asyncHandler(async (req, res) => {
   }
 
   let bookings = await BookingOrder.find({ customer: req.user.customerId })
-    .populate("yacht", "name images location")
+    .populate("yacht", "name image location")
     .populate("schedule", "startDate endDate")
     .populate("consultationData.requestServices.serviceId")
     .populate({
@@ -1314,7 +1314,7 @@ exports.getCustomerBookingDetail = asyncHandler(async (req, res) => {
   }
 
   let booking = await BookingOrder.findById(bookingId)
-    .populate("yacht", "name images location")
+    .populate("yacht", "name image location")
     .populate("schedule", "startDate endDate")
     .populate({ path: "customer", select: "fullName email phoneNumber" })
     .populate("consultationData.requestServices.serviceId")
@@ -1929,30 +1929,39 @@ exports.changeSchedule = async (req, res) => {
   try {
     const { bookingId } = req.params;
     const { newYachtId, newStartDate, newEndDate } = req.body;
-    const booking = await mongoose.model('BookingOrder').findById(bookingId);
-    if (!booking) return res.status(404).json({ message: 'Không tìm thấy booking' });
+    const booking = await mongoose.model("BookingOrder").findById(bookingId);
+    if (!booking)
+      return res.status(404).json({ message: "Không tìm thấy booking" });
 
     // Kiểm tra quyền: chỉ company sở hữu thuyền mới được đổi
-    const yacht = await mongoose.model('Yacht').findById(newYachtId || booking.yacht);
-    if (!yacht) return res.status(404).json({ message: 'Không tìm thấy thuyền' });
+    const yacht = await mongoose
+      .model("Yacht")
+      .findById(newYachtId || booking.yacht);
+    if (!yacht)
+      return res.status(404).json({ message: "Không tìm thấy thuyền" });
     if (req.companyId && yacht.IdCompanys.toString() !== req.companyId) {
-      return res.status(403).json({ message: 'Bạn không có quyền đổi lịch thuyền này' });
+      return res
+        .status(403)
+        .json({ message: "Bạn không có quyền đổi lịch thuyền này" });
     }
 
     // Kiểm tra trùng lịch
-    const BookingOrder = mongoose.model('BookingOrder');
+    const BookingOrder = mongoose.model("BookingOrder");
     const isSlotAvailable = await BookingOrder.findOne({
       yacht: newYachtId || booking.yacht,
       _id: { $ne: bookingId },
       $or: [
         { checkInDate: { $lt: newEndDate, $gte: newStartDate } },
         { checkOutDate: { $gt: newStartDate, $lte: newEndDate } },
-        { checkInDate: { $lte: newStartDate }, checkOutDate: { $gte: newEndDate } }
+        {
+          checkInDate: { $lte: newStartDate },
+          checkOutDate: { $gte: newEndDate },
+        },
       ],
-      status: 'confirmed'
+      status: "confirmed",
     });
     if (isSlotAvailable) {
-      return res.status(400).json({ message: 'Lịch đã bị trùng!' });
+      return res.status(400).json({ message: "Lịch đã bị trùng!" });
     }
 
     // Cập nhật booking
@@ -1963,15 +1972,15 @@ exports.changeSchedule = async (req, res) => {
 
     // Cập nhật invoice nếu cần (giả sử có trường invoiceId trong booking)
     if (booking.invoiceId) {
-      const Invoice = mongoose.model('Invoice');
+      const Invoice = mongoose.model("Invoice");
       // Tính lại tổng tiền nếu cần, ví dụ dựa vào thời gian mới
       // (Bạn có thể bổ sung logic tính giá ở đây)
       // const newTotal = ...
       // await Invoice.findByIdAndUpdate(booking.invoiceId, { total: newTotal });
     }
 
-    res.json({ message: 'Đổi lịch thành công', booking });
+    res.json({ message: "Đổi lịch thành công", booking });
   } catch (err) {
-    res.status(500).json({ message: 'Lỗi đổi lịch', error: err.message });
+    res.status(500).json({ message: "Lỗi đổi lịch", error: err.message });
   }
 };
