@@ -45,17 +45,25 @@ const veryfiToken = async (req, res, next) => {
       .json({ success: false, message: "Token không hợp lệ" });
   }
 };
-// const adminProtect = (req, res, next) => {
-//   if (req.user && req.user.role === "admin") {
-//     // Assuming 'role' field in UserAccount model
-//     next();
-//   } else {
-//     res
-//       .status(403)
-//       .json({ success: false, message: "Not authorized as an admin" });
-//   }
-// };
+
+const authenticate = (req, res, next) => {
+  return veryfiToken(req, res, next);
+};
+
+// Middleware kiểm tra quyền company
+const isCompany = (req, res, next) => {
+  if (req.user && req.user.role === "COMPANY") {
+    // Gán companyId cho request để dùng ở controller
+    req.companyId = req.user.companyId || (req.company && req.company._id.toString());
+    req.accountId = req.user._id;
+    return next();
+  }
+  return res.status(403).json({ message: "Chỉ company mới có quyền này!" });
+};
+
 module.exports = {
   veryfiToken,
+  authenticate,
+  isCompany,
   // adminProtect,
 };
