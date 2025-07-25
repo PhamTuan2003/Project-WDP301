@@ -13,6 +13,7 @@ const yachtImageRouter = require("./yachtImageRouter");
 const accountCompanyRouter = require("./accountCompanyRouter");
 const locationRouter = require("./locationRouter");
 const yachtTypeRouter = require("./yachtTypeRouter");
+const companyYachtScheduleRouter = require('./companyYachtScheduleRouter');
 
 module.exports = (app) => {
   const api = "/api/v1";
@@ -28,7 +29,8 @@ module.exports = (app) => {
   app.use(api + "/services", serviceRouter);
   app.use(api + "/locations", locationRouter);
   app.use(api + "/yachtTypes", yachtTypeRouter);
-  app.use(api + "/yachtImages", yachtImageRouter);
+  app.use(api + "/yachtImage", yachtImageRouter);
   app.use(api + "/account-companies", accountCompanyRouter);
   app.use(api + "/admin", adminRouter);
+  app.use('/company/calendar-schedules', companyYachtScheduleRouter);
 };

@@ -20,7 +20,7 @@ const {
   confirmFullPayment,
   confirmBooking,
 } = bookingController;
-const { veryfiToken } = require("../middleware/authMiddleware");
+const { veryfiToken, authenticate, isCompany } = require("../middleware/authMiddleware");
 const { testSendMail } = require("../utils/sendMail");
 
 // ==================== BOOKING CREATION & CONSULTATION ====================
@@ -61,6 +61,9 @@ router.get("/test-send-mail", async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 });
+
+// Đổi lịch booking cho company
+router.put('/company/bookings/:bookingId/change-schedule', authenticate, isCompany, bookingController.changeSchedule);
 
 // Lấy toàn bộ bookingOrder (chỉ cho admin)
 router.get("/all", veryfiToken, bookingController.getAllBookingOrders);
