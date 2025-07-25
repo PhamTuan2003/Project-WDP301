@@ -346,7 +346,7 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
     }
     const issueDateStr = issueDateValue
       ? new Date(issueDateValue).toLocaleDateString("vi-VN")
-      : "N/A";
+      : new Date().toLocaleDateString("vi-VN");
     doc.text(
       `Ký hiệu hóa đơn: AB/20E                Số hóa đơn: ${invoice.invoiceNumber}                        Ngày phát hành: ${issueDateStr}`,
       45,
