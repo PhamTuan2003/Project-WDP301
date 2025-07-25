@@ -1,5 +1,5 @@
 const { Company, Account, BookingOrder, YachtSchema, Schedule, BookingService, Service } = require("../model");
-const { sendCompanyRegisterEmail } = require('../utils/sendMail');
+const { sendCompanyRegisterEmail } = require("../utils/sendMail");
 const ExcelJS = require("exceljs");
 
 // ========== CRUD Company ==========
@@ -13,7 +13,7 @@ const createCompany = async (req, res) => {
       username,
       password,
       roles: "COMPANY",
-      status: 1
+      status: 1,
     });
     await account.save();
 
@@ -21,7 +21,7 @@ const createCompany = async (req, res) => {
       name,
       address,
       email,
-      accountId: account._id
+      accountId: account._id,
     });
     await company.save();
 
@@ -38,7 +38,7 @@ const updateCompany = async (req, res) => {
   try {
     const { name, address, email, username } = req.body;
     const company = await Company.findById(req.params.id);
-    if (!company) return res.status(404).json({ error: 'Company not found' });
+    if (!company) return res.status(404).json({ error: "Company not found" });
 
     company.name = name;
     company.address = address;
@@ -49,7 +49,7 @@ const updateCompany = async (req, res) => {
       await Account.findByIdAndUpdate(company.accountId, { username });
     }
 
-    res.json({ message: 'Updated successfully' });
+    res.json({ message: "Updated successfully" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -59,13 +59,13 @@ const updateCompany = async (req, res) => {
 const deleteCompany = async (req, res) => {
   try {
     const company = await Company.findByIdAndDelete(req.params.id);
-    if (!company) return res.status(404).json({ error: 'Company not found' });
+    if (!company) return res.status(404).json({ error: "Company not found" });
 
     if (company.accountId) {
       await Account.findByIdAndDelete(company.accountId);
     }
 
-    res.json({ message: 'Deleted successfully' });
+    res.json({ message: "Deleted successfully" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -74,7 +74,7 @@ const deleteCompany = async (req, res) => {
 // Lấy tất cả công ty (không filter)
 const getAllCompanies = async (req, res) => {
   try {
-    const companies = await Company.find().populate('accountId');
+    const companies = await Company.find().populate("accountId");
     res.json(companies);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -84,10 +84,7 @@ const getAllCompanies = async (req, res) => {
 // Lấy các công ty có `exist = 1`
 const getAllCompany = async (req, res) => {
   try {
-    const companies = await Company.find()
-      .populate("accountId", "-_id username roles status")
-      .where("exist")
-      .equals(1);
+    const companies = await Company.find().populate("accountId", "-_id username roles status").where("exist").equals(1);
 
     res.status(200).json({
       success: true,
@@ -127,8 +124,8 @@ const getRevenueBooking = async (req, res) => {
     endDate.setMonth(endDate.getMonth() + 1);
 
     // Lấy tất cả yacht thuộc công ty
-    const yachts = await YachtSchema.find({ IdCompanys: idCompany }).select('_id');
-    const yachtIds = yachts.map(y => y._id);
+    const yachts = await YachtSchema.find({ IdCompanys: idCompany }).select("_id");
+    const yachtIds = yachts.map((y) => y._id);
 
     // Lấy booking theo yachtIds
     const bookings = await BookingOrder.find({
@@ -137,9 +134,9 @@ const getRevenueBooking = async (req, res) => {
     });
 
     let total = 0;
-    bookings.forEach(order => {
+    bookings.forEach((order) => {
       const totalAmount = order.paymentBreakdown?.totalAmount || 0;
-      if (order.status === 'cancelled') {
+      if (order.status === "cancelled") {
         if (order.paymentBreakdown && order.paymentBreakdown.depositAmount) {
           total += order.paymentBreakdown.depositAmount;
         } else if (totalAmount) {
@@ -150,11 +147,11 @@ const getRevenueBooking = async (req, res) => {
       }
     });
 
-    res.status(200).json({ 
-        success: true,
-        data: {
-            revenue: Math.round(total) 
-        }
+    res.status(200).json({
+      success: true,
+      data: {
+        revenue: Math.round(total),
+      },
     });
   } catch (error) {
     console.error("Error getting revenue:", error);
@@ -175,7 +172,7 @@ const getRevenueService = async (req, res) => {
     const endDate = new Date(selectedYear, selectedMonth, 1);
 
     // 1. Lấy tất cả yacht thuộc công ty
-    const yachts = await YachtSchema.find({ IdCompanys: idCompany }).select('_id');
+    const yachts = await YachtSchema.find({ IdCompanys: idCompany }).select("_id");
     const yachtIds = yachts.map((y) => y._id);
     // 2. Lấy tất cả booking của các yacht đó trong khoảng thời gian
     const bookings = await BookingOrder.find({
@@ -212,14 +209,14 @@ const getRevenueService = async (req, res) => {
     }
 
     res.status(200).json({
-        success: true,
-        data: {
-            revenueService: Math.round(totalServiceRevenue)
-        }
+      success: true,
+      data: {
+        revenueService: Math.round(totalServiceRevenue),
+      },
     });
   } catch (error) {
-    console.error('Error getting revenue from service:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    console.error("Error getting revenue from service:", error);
+    res.status(500).json({ message: "Internal server error" });
   }
 };
 
@@ -231,23 +228,34 @@ const getMonthlyRevenue = async (req, res) => {
         $group: {
           _id: {
             year: { $year: "$bookingDate" },
-            month: { $month: "$bookingDate" }
+            month: { $month: "$bookingDate" },
           },
-          earnings: { $sum: "$amount" }
-        }
+          earnings: { $sum: "$amount" },
+        },
       },
-      { $sort: { "_id.year": -1, "_id.month": 1 } }
+      { $sort: { "_id.year": -1, "_id.month": 1 } },
     ]);
 
     const monthNames = [
-      '', 'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
+      "",
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December",
     ];
 
-    const data = result.map(item => ({
+    const data = result.map((item) => ({
       year: item._id.year,
       month: monthNames[item._id.month],
-      earnings: item.earnings
+      earnings: item.earnings,
     }));
 
     res.json(data);
@@ -266,8 +274,8 @@ async function getBookings(idCompany, month, year) {
   const endDate = new Date(y, m, 1);
 
   // Lấy tất cả yacht thuộc công ty
-  const yachts = await YachtSchema.find({ IdCompanys: idCompany }).select('_id');
-  const yachtIds = yachts.map(y => y._id);
+  const yachts = await YachtSchema.find({ IdCompanys: idCompany }).select("_id");
+  const yachtIds = yachts.map((y) => y._id);
 
   const bookings = await BookingOrder.find({
     yacht: { $in: yachtIds },
@@ -278,7 +286,7 @@ async function getBookings(idCompany, month, year) {
     .exec();
 
   // Xử lý logic: nếu booking huỷ, amount = 0, deposit = tiền cọc
-  return bookings.map(order => {
+  return bookings.map((order) => {
     const totalAmount = order.paymentBreakdown?.totalAmount || 0;
     let deposit = 0;
     if (order.paymentBreakdown && order.paymentBreakdown.depositAmount) {
@@ -286,7 +294,7 @@ async function getBookings(idCompany, month, year) {
     } else if (totalAmount) {
       deposit = Math.round(totalAmount * 0.2);
     }
-    if (order.status === 'cancelled') {
+    if (order.status === "cancelled") {
       return { ...order.toObject(), amount: 0, deposit };
     }
     return { ...order.toObject(), amount: totalAmount, deposit };
@@ -344,7 +352,9 @@ const exportBooking = async (req, res) => {
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename=Booking_Order_${month || new Date().getMonth() + 1}_${year || new Date().getFullYear()}.xlsx`
+      `attachment; filename=Booking_Order_${month || new Date().getMonth() + 1}_${
+        year || new Date().getFullYear()
+      }.xlsx`
     );
 
     await workbook.xlsx.write(res);
@@ -437,17 +447,30 @@ const getBookingByYear = async (req, res) => {
     const endDate = new Date(`${parseInt(year) + 1}-01-01T00:00:00.000Z`);
 
     // 1. Lấy tất cả yacht thuộc công ty
-    const yachts = await YachtSchema.find({ IdCompanys: idCompany }).select('_id');
-    const yachtIds = yachts.map(y => y._id);
+    const yachts = await YachtSchema.find({ IdCompanys: idCompany }).select("_id");
+    const yachtIds = yachts.map((y) => y._id);
 
     // 2. Lấy tất cả booking của công ty trong cả năm
     const bookings = await BookingOrder.find({
       yacht: { $in: yachtIds },
       createdAt: { $gte: startDate, $lt: endDate },
-    }).select('status createdAt'); // Chỉ lấy các trường cần thiết để tối ưu
+    }).select("status createdAt"); // Chỉ lấy các trường cần thiết để tối ưu
 
-    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-    
+    const monthNames = [
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December",
+    ];
+
     // 3. Khởi tạo mảng kết quả thống kê cho 12 tháng
     const monthlyStats = Array.from({ length: 12 }, (_, i) => ({
       Month: monthNames[i],
@@ -457,16 +480,16 @@ const getBookingByYear = async (req, res) => {
     }));
 
     // 4. Lặp qua các booking và đếm số lượng theo status
-    bookings.forEach(booking => {
+    bookings.forEach((booking) => {
       const monthIndex = new Date(booking.createdAt).getMonth(); // 0-11
-      const status = (booking.status || '').toLowerCase();
+      const status = (booking.status || "").toLowerCase();
 
       // Phân loại status
-      if (status.includes('pending') || status.includes('requested')) {
+      if (status.includes("pending") || status.includes("requested")) {
         monthlyStats[monthIndex].pending++;
-      } else if (status.includes('cancel') || status.includes('rejected')) {
+      } else if (status.includes("cancel") || status.includes("rejected")) {
         monthlyStats[monthIndex].cancel++;
-      } else if (status.includes('confirm') || status.includes('completed')) {
+      } else if (status.includes("confirm") || status.includes("completed")) {
         monthlyStats[monthIndex].confirm++;
       }
     });
@@ -499,19 +522,19 @@ const getTotalBookingStats = async (req, res) => {
     const endDate = new Date(a_year, a_month, 1);
 
     // 1. Lấy tất cả yacht thuộc công ty
-    const yachts = await YachtSchema.find({ IdCompanys: idCompany }).select('_id');
-    const yachtIds = yachts.map(y => y._id);
+    const yachts = await YachtSchema.find({ IdCompanys: idCompany }).select("_id");
+    const yachtIds = yachts.map((y) => y._id);
 
     // 2. Lấy tất cả booking của công ty trong khoảng thời gian
     const bookings = await BookingOrder.find({
       yacht: { $in: yachtIds },
       createdAt: { $gte: startDate, $lt: endDate },
-    }).select('status'); // Chỉ lấy status để tối ưu
+    }).select("status"); // Chỉ lấy status để tối ưu
 
     // 3. Đếm số lượng booking theo status
     const statusCounts = {};
-    bookings.forEach(booking => {
-      const status = booking.status || 'unknown';
+    bookings.forEach((booking) => {
+      const status = booking.status || "unknown";
       statusCounts[status] = (statusCounts[status] || 0) + 1;
     });
 
@@ -522,6 +545,47 @@ const getTotalBookingStats = async (req, res) => {
   } catch (error) {
     console.error("Error in getTotalBookingStats:", error);
     res.status(500).json({ message: "Lỗi server khi lấy thống kê booking", error: error.message });
+  }
+};
+
+// Cập nhật profile công ty (tự sửa thông tin cá nhân)
+const updateProfileCompany = async (req, res) => {
+  try {
+    const companyId = req.params.id;
+    const { name, address, email } = req.body;
+    const logo = req.file || req.body.logo; // multer sẽ đẩy file vào req.file nếu là multipart
+
+    console.log("== Received update:");
+    console.log("Company ID:", companyId);
+    console.log("Name:", name);
+    console.log("Address:", address);
+    console.log("Email:", email);
+    console.log("Logo (req.file):", req.file);
+    console.log("Logo (req.body.logo):", req.body.logo);
+
+    const company = await Company.findById(companyId);
+    if (!company) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy công ty." });
+    }
+
+    if (name) company.name = name;
+    if (address) company.address = address;
+    if (email) company.email = email;
+
+    if (req.file && req.file.path) {
+      company.logo = req.file.path; // link từ Cloudinary
+    }
+
+    await company.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Cập nhật profile thành công.",
+      data: true,
+    });
+  } catch (error) {
+    console.error("== Lỗi khi update profile công ty:", error);
+    res.status(500).json({ success: false, message: "Lỗi server khi cập nhật profile." });
   }
 };
 
@@ -539,5 +603,6 @@ module.exports = {
   getInfoCompany,
   loginCompany,
   getBookingByYear,
-  getTotalBookingStats
+  getTotalBookingStats,
+  updateProfileCompany,
 };

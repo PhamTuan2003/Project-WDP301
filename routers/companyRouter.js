@@ -16,7 +16,9 @@ const {
   loginCompany,
   getBookingByYear,
   getTotalBookingStats,
+  updateProfileCompany,
 } = require("../controller/companyController");
+const { upload } = require("../utils/configClound");
 const { veryfiToken } = require("../middleware/authMiddleware");
 
 // CRUD COMPANY
@@ -24,6 +26,7 @@ router.post("/", createCompany); // Tạo công ty
 router.get("/", getAllCompany); // Lấy company có exist = 1 (cho FE hiển thị)
 router.get("/all", getAllCompanies); // Lấy tất cả (cả exist = 0)
 router.put("/:id", veryfiToken, updateCompany); // Cập nhật
+router.put("/profile/:id", veryfiToken, upload.single("logo"), updateProfileCompany); // ✅ Company tự update profile (có thể có ảnh)
 router.delete("/:id", veryfiToken, deleteCompany); // Xoá
 router.get("/count", veryfiToken, countCompanies); // Đếm tổng
 
