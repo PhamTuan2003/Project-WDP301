@@ -177,6 +177,7 @@ const googleLogin = async (req, res) => {
         email: customer.email,
         phoneNumber: customer.phoneNumber,
         avatar: customer.avatar, // URL từ Google
+        googleId: customer.googleId,
       },
       requiresPhoneNumber: !customer.phoneNumber,
     });

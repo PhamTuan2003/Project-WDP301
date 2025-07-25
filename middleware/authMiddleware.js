@@ -9,19 +9,20 @@ const veryfiToken = async (req, res, next) => {
   if (!authHeader) return res.status(401).json({ message: "Không có Token" });
 
   const token = authHeader.split(" ")[1];
-  if (!token)
-    return res.status(401).json({ message: "Token không đúng định dạng" });
+  if (!token) return res.status(401).json({ message: "Token không đúng định dạng" });
 
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
     req.user = payload;
 
     if (payload.role === "CUSTOMER") {
-      const customer = await Customer.findOne({ accountId: payload._id });
+      const customer = await Customer.findOne({
+        $or: [{ accountId: payload._id }, { googleId: payload._id }],
+      });
       if (!customer) {
         return res.status(401).json({
           success: false,
-          message: "Customer not found for this account",
+          message: "Không tìm thấy khách hàng cho tài khoản này",
         });
       }
       req.user.customerId = customer._id.toString();
@@ -40,9 +41,29 @@ const veryfiToken = async (req, res, next) => {
     next();
   } catch (err) {
     console.error("JWT verify error:", err);
-    return res
-      .status(401)
-      .json({ success: false, message: "Token không hợp lệ" });
+    return res.status(401).json({ success: false, message: "Token không hợp lệ" });
+  }
+};
+
+// Middleware để bảo vệ các route chỉ cho phép admin truy cập
+const verifyAdminToken = (req, res, next) => {
+  const authHeader = req.headers["authorization"];
+  if (!authHeader) return res.status(401).json({ message: "Không có Token" });
+
+  const token = authHeader.split(" ")[1];
+  if (!token) return res.status(401).json({ message: "Token không đúng định dạng" });
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (decoded.role !== "ADMIN") {
+      return res.status(403).json({ message: "Không có quyền admin" });
+    }
+
+    req.user = decoded;
+    next();
+  } catch (err) {
+    console.error("❌ Admin token error:", err);
+    return res.status(401).json({ message: "Token không hợp lệ" });
   }
 };
 
@@ -63,7 +84,7 @@ const isCompany = (req, res, next) => {
 
 module.exports = {
   veryfiToken,
+  verifyAdminToken,
   authenticate,
   isCompany,
-  // adminProtect,
 };
