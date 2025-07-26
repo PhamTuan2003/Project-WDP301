@@ -277,13 +277,28 @@ async function getBookings(idCompany, month, year) {
   const yachts = await YachtSchema.find({ IdCompanys: idCompany }).select("_id");
   const yachtIds = yachts.map((y) => y._id);
 
-  const bookings = await BookingOrder.find({
+  // Ưu tiên dùng createdAt nếu bookingDate không có dữ liệu
+  let bookings = await BookingOrder.find({
     yacht: { $in: yachtIds },
-    bookingDate: { $gte: startDate, $lt: endDate },
+    $or: [
+      { bookingDate: { $gte: startDate, $lt: endDate } },
+      { createdAt: { $gte: startDate, $lt: endDate } }
+    ]
   })
     .populate("customerId")
     .populate("scheduleId")
     .exec();
+
+  // Nếu không có booking nào, thử lại chỉ với createdAt
+  if (!bookings || bookings.length === 0) {
+    bookings = await BookingOrder.find({
+      yacht: { $in: yachtIds },
+      createdAt: { $gte: startDate, $lt: endDate }
+    })
+      .populate("customerId")
+      .populate("scheduleId")
+      .exec();
+  }
 
   // Xử lý logic: nếu booking huỷ, amount = 0, deposit = tiền cọc
   return bookings.map((order) => {
@@ -331,37 +346,41 @@ const exportBooking = async (req, res) => {
     ];
     sheet.addRow(headers);
 
-    bookingOrders.forEach((order) => {
-      sheet.addRow([
-        order._id ? order._id.toString() : "N/A",
-        order.amount || 0,
-        order.deposit || 0,
-        order.bookingDate ? order.bookingDate.toISOString() : "N/A",
-        order.requirements || "N/A",
-        order.status || "N/A",
-        order.customerId?.fullName || "N/A",
-        order.customerId?.email || "N/A",
-        order.customerId?.address || "N/A",
-        order.customerId?.phone || "N/A",
-        order.scheduleId?.startDate ? order.scheduleId.startDate.toISOString() : "N/A",
-        order.scheduleId?.endDate ? order.scheduleId.endDate.toISOString() : "N/A",
-        order.reason || "N/A",
-      ]);
-    });
+    if (bookingOrders.length === 0) {
+      sheet.addRow(["Không có dữ liệu", ...Array(headers.length - 1).fill("")]);
+    } else {
+      bookingOrders.forEach((order) => {
+        sheet.addRow([
+          order._id ? order._id.toString() : "N/A",
+          order.amount ?? 0,
+          order.deposit ?? 0,
+          order.bookingDate ? new Date(order.bookingDate).toISOString() : (order.createdAt ? new Date(order.createdAt).toISOString() : "N/A"),
+          order.requirements ?? "N/A",
+          order.status ?? "N/A",
+          order.customerId?.fullName ?? "N/A",
+          order.customerId?.email ?? "N/A",
+          order.customerId?.address ?? "N/A",
+          order.customerId?.phone ?? "N/A",
+          order.scheduleId?.startDate ? new Date(order.scheduleId.startDate).toISOString() : "N/A",
+          order.scheduleId?.endDate ? new Date(order.scheduleId.endDate).toISOString() : "N/A",
+          order.reason ?? "N/A",
+        ]);
+      });
+    }
 
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename=Booking_Order_${month || new Date().getMonth() + 1}_${
-        year || new Date().getFullYear()
-      }.xlsx`
+      `attachment; filename=Booking_Order_${month || new Date().getMonth() + 1}_${year || new Date().getFullYear()}.xlsx`
     );
 
+    // Ghi file trực tiếp vào response, không trả về bất kỳ dữ liệu nào khác
     await workbook.xlsx.write(res);
     res.end();
   } catch (error) {
+    // Chỉ log lỗi, không trả về JSON khi export file
     console.error("Error exporting booking excel:", error);
-    res.status(500).send("Internal Server Error");
+    res.status(500).end();
   }
 };
 

@@ -12,7 +12,8 @@ const {
   getServicesByYachtId,
   getYachtsByCompanyId,
   updateScheduleToYacht,
-  updateYacht
+  updateYacht,
+  softDeleteYacht
   // createYacht,
   // addServiceToYacht,
   // addScheduleToYacht,
@@ -36,5 +37,6 @@ router.post('/add-schedule', addScheduleToYacht);
 // API cập nhật lịch trình của du thuyền
 router.put("/updateSchedule/:yachtId/:scheduleId", updateScheduleToYacht);
 router.put('/updateYacht/:id', upload.single('image'), updateYacht);
+router.put('/delete/:id', softDeleteYacht);
 
 module.exports = router;

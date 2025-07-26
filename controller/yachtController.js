@@ -495,6 +495,31 @@ const updateScheduleToYacht = async (req, res) => {
   }
 };
 
+const softDeleteYacht = async (req, res) => {
+  try {
+    const { id } = req.params;
+    let { isDeleted } = req.body;
+    if (typeof isDeleted === 'string') {
+      isDeleted = isDeleted === 'true';
+    }
+    if (typeof isDeleted !== 'boolean') {
+      return res.status(400).json({ message: 'isDeleted phải là true hoặc false' });
+    }
+    const yacht = await YachtSchema.findByIdAndUpdate(
+      id,
+      { isDeleted, updatedAt: Date.now() },
+      { new: true }
+    );
+    if (!yacht) {
+      return res.status(404).json({ message: 'Yacht not found' });
+    }
+    res.status(200).json({ message: 'Yacht isDeleted updated successfully', data: yacht });
+  } catch (error) {
+    console.error('Error updating isDeleted yacht:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
 module.exports = {
   getAllYacht,
   getAllServices,
@@ -509,4 +534,5 @@ module.exports = {
   updateYacht,
   getYachtsByCompanyId,
   updateScheduleToYacht,
+  softDeleteYacht,
 };

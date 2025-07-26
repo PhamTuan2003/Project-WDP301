@@ -1839,15 +1839,14 @@ exports.companyCancelBooking = asyncHandler(async (req, res) => {
         .status(404)
         .json({ success: false, message: "Booking không tồn tại." });
     }
-    // Chỉ cho phép huỷ nếu đã qua thời gian checkin
-    const now = new Date();
-    if (!booking.checkInDate || now < new Date(booking.checkInDate)) {
+    // Bỏ điều kiện chỉ cho phép huỷ sau thời gian check-in
+    // Chỉ không cho huỷ nếu đã completed/cancelled/rejected
+    if (["completed", "cancelled", "rejected"].includes(booking.status)) {
       await session.abortTransaction();
       session.endSession();
       return res.status(400).json({
         success: false,
-        message:
-          "Chỉ được huỷ booking sau thời gian checkin nếu khách không đến.",
+        message: `Không thể huỷ booking ở trạng thái ${booking.status}.`,
       });
     }
     booking.status = "rejected";
